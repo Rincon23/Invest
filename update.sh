@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Atualiza o Capital neste host: puxa o código novo, reconstrói a imagem e
+# Atualiza o Invest + neste host: puxa o código novo, reconstrói a imagem e
 # reinicia o container. Rode na pasta do projeto:  ./update.sh
 set -euo pipefail
 
@@ -14,7 +14,7 @@ dc() { docker compose --env-file .env.local "$@"; }
 
 if ! docker network inspect capital-db >/dev/null 2>&1; then
   echo "O banco não está no ar (falta a rede Docker capital-db)." >&2
-  echo "Suba-o antes em ~/capitalapp/db — veja deploy/postgres/README.md." >&2
+  echo "Ele é o do Capital +, em ~/capitalapp/db — veja o README." >&2
   exit 1
 fi
 
@@ -30,4 +30,4 @@ docker image prune -f >/dev/null || true
 echo "==> status"
 dc ps
 echo
-dc logs --tail=30 capital
+dc logs --tail=30 invest

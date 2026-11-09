@@ -81,42 +81,21 @@ describe('tours dos módulos', () => {
       anchors.filter((anchor) => !sources.includes(`'${anchor}'`) && !sources.includes(`"${anchor}"`)),
     ).toEqual([]);
     expect(sources).toContain('data-tour={HOME_HELP_ANCHOR}');
-    const steps = homeEditTourSteps('/mes/2026-10');
-    expect(steps.every((step) => step.href === '/mes/2026-10' && step.module === undefined)).toBe(true);
+    const steps = homeEditTourSteps('/');
+    expect(steps.every((step) => step.href === '/' && step.module === undefined)).toBe(true);
     expect(steps.at(-1)?.anchor).toBe(HOME_HELP_ANCHOR);
   });
 
-  it('monta as rotas do mês e marca de qual módulo é cada passo', () => {
-    const steps = tourSteps(['card', 'reimbursable'], '2026-09');
+  it('monta as rotas e marca de qual módulo é cada passo, terminando no botão de ajuda', () => {
+    const steps = tourSteps(['diagram', 'history']);
     expect(steps.map((step) => [step.module, step.href, step.anchor])).toEqual([
-      ['card', '/cartao', 'cartao-fatura'],
-      ['card', '/cartao?aba=parcelados', 'cartao-aba-parcelados'],
-      ['card', '/cartao?aba=cartoes', 'cartao-aba-cartoes'],
-      ['card', '/mes/2026-09', 'cartao-pergunta'],
-      ['card', '/cartao', 'ajuda-card'],
-      ['reimbursable', '/mes/2026-09', 'categoria-a-receber'],
-      ['reimbursable', '/mes/2026-09/lancamentos?aba=a-receber', 'aba-a-receber'],
-      ['reimbursable', '/mes/2026-09', 'card-reimbursable'],
-      ['reimbursable', '/mes/2026-09/lancamentos?aba=a-receber', 'ajuda-reimbursable'],
+      ['diagram', '/diagrama', 'diagrama-valor'],
+      ['diagram', '/diagrama', 'diagrama-carteira'],
+      ['diagram', '/diagrama?aba=ativos', 'diagrama-ativos'],
+      ['diagram', '/diagrama', 'diagrama-config'],
+      ['diagram', '/diagrama', 'ajuda-diagram'],
+      ['history', '/historico', 'historico-investimentos'],
+      ['history', '/historico', 'ajuda-history'],
     ]);
-    // The card question is inside the expense form; the help button is not, so it closes first.
-    expect(steps[3].sheet).toBe('expense-form');
-    expect(steps[4].sheet).toBeUndefined();
-  });
-
-  it('o passo da aba Investimentos do Histórico só aparece com o Diagrama ligado', () => {
-    const anchors = (isOn: (key: string) => boolean) =>
-      tourSteps(['history'], '2026-10', isOn).map((step) => step.anchor);
-    expect(anchors(() => false)).not.toContain('historico-investimentos');
-    expect(anchors((key) => key === 'diagram')).toContain('historico-investimentos');
-    expect(anchors(() => false).at(-1)).toBe('ajuda-history');
-  });
-
-  it('o tour do Cartão é um só, curto, e passa pelas três abas', () => {
-    const anchors = MODULE_TOURS.card.map((step) => step.anchor);
-    expect(anchors).toContain('cartao-fatura');
-    expect(anchors).toContain('cartao-aba-parcelados');
-    expect(anchors).toContain('cartao-aba-cartoes');
-    expect(anchors.length).toBeLessThanOrEqual(4);
   });
 });

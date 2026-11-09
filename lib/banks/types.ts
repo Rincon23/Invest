@@ -1,6 +1,6 @@
 /**
  * Open Finance through Meu Pluggy: what the screens see. Each bank the person brings is one
- * Pluggy "item" (one authorization at meu.pluggy.ai); its accounts and cards come with it.
+ * Pluggy "item" (one authorization at meu.pluggy.ai); its investments come with it.
  */
 
 /**
@@ -13,20 +13,9 @@ export type BankConnectionStatus = 'pending' | 'ok' | 'error' | 'reconnect';
 
 export type BankAccountKind = 'checking' | 'savings' | 'card' | 'other';
 
-/**
- * An account or card as the screens see it: no balance, limit or due date. The banks only check
- * what was entered in the Capital; the balances stay on the server for the Reserva (`reserve()`),
- * the only place they are shown, and only for the accounts the person marks.
- */
-export interface BankAccount {
-  id: string;
-  kind: BankAccountKind;
-  name: string;
-}
-
 export interface BankConnection {
   itemId: string;
-  /** The person's own name for it, or the one the Capital suggested. */
+  /** The person's own name for it, or the one the app suggested. */
   name: string;
   /** Whether the person named it (then a new suggestion never replaces it). */
   named: boolean;
@@ -37,7 +26,8 @@ export interface BankConnection {
   /** When the authorization runs out (a year after it was given). */
   consentExpiresAt: string | null;
   createdAt: string;
-  accounts: BankAccount[];
+  /** How many investments it sent in the last read. */
+  investments: number;
 }
 
 export interface BanksOverview {
@@ -46,34 +36,6 @@ export interface BanksOverview {
   connections: BankConnection[];
   /** How many banks Meu Pluggy connects for free. */
   limit: number;
-}
-
-/** An account or investment the person can mark as part of their reserve. */
-export interface ReserveSource {
-  id: string;
-  kind: 'account' | 'investment';
-  name: string;
-  /** "conta", "poupança", "CDB", "Tesouro", "ação"… */
-  detail: string;
-  /** Fixed income and accounts first: what a reserve usually is. */
-  usual: boolean;
-  balance: number | null;
-  marked: boolean;
-}
-
-export interface ReserveSourceBank {
-  itemId: string;
-  name: string;
-  status: BankConnectionStatus;
-  lastUpdatedAt: string | null;
-  sources: ReserveSource[];
-}
-
-/** The Reserva fed by the banks: what can be marked, and the sum of what is. */
-export interface BankReserve {
-  banks: ReserveSourceBank[];
-  /** The sum of the marked balances; null when nothing is marked (the person types it). */
-  total: number | null;
 }
 
 /** Meu Pluggy's free plan: up to 5 active connections, all of the same person. */

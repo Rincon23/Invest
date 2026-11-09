@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { ModuleKey } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import { mayUseModule } from '@/lib/modules';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useSettings } from '@/components/providers/SettingsProvider';
@@ -13,15 +13,12 @@ import {
   type NotificationCategory,
 } from '@/lib/notifications';
 
-const TOGGLEABLE: NotificationCategory[] = ['reminder', 'card', 'recurring', 'banks', 'feature', 'motivation'];
+const TOGGLEABLE: NotificationCategory[] = ['banks', 'feature'];
 /**
  * The module each category comes from. A module only for VIP accounts never notifies anyone else,
  * so they don't see its switch.
  */
 const CATEGORY_MODULE: Partial<Record<NotificationCategory, ModuleKey>> = {
-  reminder: 'reminders',
-  card: 'card',
-  recurring: 'recurring',
   banks: 'banks',
 };
 
@@ -29,8 +26,7 @@ const CATEGORY_MODULE: Partial<Record<NotificationCategory, ModuleKey>> = {
  * Which kinds of notification push to the phone. A PWA has no way to create separate channels
  * in the phone's own notification settings (only a native Android/iOS app can do that) — the
  * browser gives one on/off switch per site (above, in "Neste aparelho"). This is the closest
- * equivalent inside the app: a switch per kind, so a device can still get lembretes without
- * getting every novidade. Everything keeps showing up in the Central de notificações regardless.
+ * equivalent inside the app: a switch per kind. Everything keeps showing up in the Central de notificações regardless.
  */
 export function NotificationPreferencesSection() {
   const { settings, saveSettings } = useSettings();

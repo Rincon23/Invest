@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { HomeTemplate } from '../modules';
-import { budgetSettings, user } from './db/schema';
+import { settings, user } from './db/schema';
 import type { Database, Transaction } from './db/types';
 
 type Env = Record<string, string | undefined>;
@@ -31,16 +31,15 @@ async function layoutOf(ex: Database | Transaction, email: string | null): Promi
   if (!email) return null;
   const [row] = await ex
     .select({
-      homePages: budgetSettings.homePages,
-      homeOrder: budgetSettings.homeOrder,
-      homeCardSizes: budgetSettings.homeCardSizes,
+      homePages: settings.homePages,
+      homeCardSizes: settings.homeCardSizes,
     })
-    .from(budgetSettings)
-    .innerJoin(user, eq(user.id, budgetSettings.userId))
+    .from(settings)
+    .innerJoin(user, eq(user.id, settings.userId))
     .where(eq(user.email, email));
   if (!row) return null;
   return {
-    homePages: row.homePages ?? (row.homeOrder ? [row.homeOrder] : null),
+    homePages: row.homePages ?? null,
     homeCardSizes: row.homeCardSizes,
   };
 }

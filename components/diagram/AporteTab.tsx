@@ -1,15 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import {
-  amountToInputValue,
-  computeMonthSummary,
-  currentMonthKey,
-  formatBRL,
-  parseAmountInput,
-  todayISO,
-  type BudgetSettings,
-} from '@/lib/budget';
+import { useState } from 'react';
+import { amountToInputValue, formatBRL, parseAmountInput, todayISO } from '@/lib/core';
 import {
   assetType,
   fixedIncomeAmount,
@@ -22,8 +14,7 @@ import {
   type FixedIncomeType,
   type PlanInput,
 } from '@/lib/diagram';
-import { isModuleOn } from '@/lib/modules';
-import { budgetRepository, diagramRepository } from '@/lib/storage';
+import { diagramRepository } from '@/lib/storage';
 import { AmountInput } from '@/components/ui/AmountInput';
 import { useToast } from '@/components/ui/Toast';
 import { ContributionResult } from './ContributionResult';
@@ -47,12 +38,10 @@ interface Basis {
  */
 export function AporteTab({
   overview,
-  settings,
   onChanged,
   onOpenTargets,
 }: {
   overview: DiagramOverview;
-  settings: BudgetSettings;
   onChanged: () => Promise<DiagramOverview | null>;
   onOpenTargets: () => void;
 }) {
@@ -63,33 +52,11 @@ export function AporteTab({
   const [step, setStep] = useState<Step>('input');
   const [confirmed, setConfirmed] = useState<FixedIncomeType[]>([]);
   const [basis, setBasis] = useState<Basis | null>(null);
-  const [investmentsLeft, setInvestmentsLeft] = useState<number | null>(null);
 
   const parsed = Math.max(0, parseAmountInput(amount));
   const withTarget = typesWithTarget(overview.settings.targets);
   const fixedTypes = withTarget.filter((type): type is FixedIncomeType => isFixedIncomeType(type));
-  const budgetOn = isModuleOn(settings, 'budget');
   const portfolioTotal = portfolioByType(overview).total;
-
-  // "Usar o que sobrou em Investimentos": what the category still has this month.
-  useEffect(() => {
-    if (!budgetOn) return;
-    const topic = settings.topics.find((item) => item.preset === 'investimentos' && !item.archived);
-    if (!topic) return;
-    let cancelled = false;
-    void budgetRepository
-      .peekMonth(currentMonthKey())
-      .then((month) => {
-        const result = computeMonthSummary(month, settings.topics).topics.find(
-          (item) => item.topicId === topic.id,
-        );
-        if (!cancelled) setInvestmentsLeft(result ? result.remaining : null);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [budgetOn, settings.topics]);
 
   function showResult(source: DiagramOverview) {
     const input: PlanInput = {
@@ -159,18 +126,6 @@ export function AporteTab({
               }}
               label="Quanto você quer investir"
             />
-            {investmentsLeft !== null && investmentsLeft > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAmount(amountToInputValue(investmentsLeft));
-                  setStep('input');
-                }}
-                className="border-border text-foreground self-start rounded-full border px-3 py-1.5 text-xs font-medium"
-              >
-                Usar o que sobrou em Investimentos no mês: {formatBRL(investmentsLeft)}
-              </button>
-            )}
             <button
               type="button"
               onClick={calculate}
@@ -212,7 +167,6 @@ export function AporteTab({
         <ContributionResult
           key={basis.run}
           basis={basis}
-          launchAvailable={isModuleOn(settings, 'expenses')}
           onChanged={onChanged}
         />
       )}

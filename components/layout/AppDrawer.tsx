@@ -12,7 +12,7 @@ import {
   type RefObject,
 } from 'react';
 import { ChevronDown, LayoutGrid, List, Server, Settings, ShieldCheck } from 'lucide-react';
-import type { ModuleKey, Month } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import { moduleDefinition, moreItems, navEntry } from '@/lib/modules';
 import type { NotificationCategory } from '@/lib/notifications';
 import { getStoredMoreLayout, setStoredMoreLayout, type MoreLayout } from '@/lib/storage/preferences';
@@ -20,17 +20,13 @@ import { MoreMenu, type MoreMenuSection } from '@/components/layout/MoreMenu';
 import { MODULE_VISUALS } from '@/components/modules/visuals';
 import { useNotifications } from '@/components/notifications/NotificationsProvider';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { MissionsCard } from '@/components/missions/MissionsCard';
 import { useSettings } from '@/components/providers/SettingsProvider';
 import { popSheetEntry, pushSheetEntry, registerSheet } from '@/components/ui/sheetHistory';
 import { BACK_MS, COMMIT_VELOCITY, EASE, IN_MS, MIN_FLICK_DISTANCE } from './swipePhysics';
 import { useVerticalDrag } from './useVerticalDrag';
 
 /** Which app icons carry a count of unread notifications, and which category counts toward it. */
-const MODULE_NOTIFICATION_CATEGORY: Partial<Record<ModuleKey, NotificationCategory>> = {
-  reminders: 'reminder',
-  recurring: 'recurring',
-};
+const MODULE_NOTIFICATION_CATEGORY: Partial<Record<ModuleKey, NotificationCategory>> = {};
 
 /** How much of its height the drawer has to travel (up to open, down to close) to go through. */
 export const DRAWER_COMMIT_FRACTION = 0.25;
@@ -57,8 +53,7 @@ export interface AppDrawerHandle {
 }
 
 /**
- * The app drawer, which used to be the "Mais" tab: the account, every module (with the unread
- * count of Lembretes on its icon), Privacidade, Configurações and, for the
+ * The app drawer: every module, Privacidade, Configurações and, for the
  * server's owner, Administração. It covers the whole Início over a blurred backdrop, like a
  * phone's app drawer, and comes up from the up-arrow following the finger.
  *
@@ -68,13 +63,10 @@ export interface AppDrawerHandle {
  */
 export function AppDrawer({
   ref,
-  month,
   onOpened,
   onClosed,
 }: {
   ref?: Ref<AppDrawerHandle>;
-  /** The month the module screens open on: the one the Início is showing. */
-  month: Month;
   /** It finished opening (the up-arrow stops hopping once the person has found it). */
   onOpened?: () => void;
   /** It finished closing: the focus goes back to the up-arrow. */
@@ -208,7 +200,6 @@ export function AppDrawer({
       />
       <DrawerPanel
         panelRef={panel}
-        month={month}
         settled={settled}
         onClose={() => close()}
         onDrag={(distance) => place(distance)}
@@ -224,7 +215,6 @@ export function AppDrawer({
 
 function DrawerPanel({
   panelRef,
-  month,
   settled,
   onClose,
   onDrag,
@@ -232,7 +222,6 @@ function DrawerPanel({
   onNavigate,
 }: {
   panelRef: RefObject<HTMLDivElement | null>;
-  month: Month;
   settled: boolean;
   onClose: () => void;
   onDrag: (distance: number) => void;
@@ -296,22 +285,18 @@ function DrawerPanel({
   const sections: MoreMenuSection[] = [
     ...moreItems(settings).map((group) => ({
       title: group.label,
-      // Missões is its card here (level, bar and the next missions), not an icon.
-      content: group.keys.includes('missions') ? <MissionsCard onNavigate={onNavigate} /> : undefined,
-      items: group.keys
-        .filter((key) => key !== 'missions')
-        .map((key) => {
-          const category = MODULE_NOTIFICATION_CATEGORY[key];
-          return {
-            key,
-            label: moduleDefinition(key).name,
-            description: moduleDefinition(key).tagline,
-            icon: MODULE_VISUALS[key].icon,
-            tone: MODULE_VISUALS[key].tone,
-            href: navEntry(key).href(month),
-            badge: category ? unread(category) : 0,
-          };
-        }),
+      items: group.keys.map((key) => {
+        const category = MODULE_NOTIFICATION_CATEGORY[key];
+        return {
+          key,
+          label: moduleDefinition(key).name,
+          description: moduleDefinition(key).tagline,
+          icon: MODULE_VISUALS[key].icon,
+          tone: MODULE_VISUALS[key].tone,
+          href: navEntry(key).href(),
+          badge: category ? unread(category) : 0,
+        };
+      }),
     })),
     {
       title: 'Ajustes',
@@ -319,7 +304,7 @@ function DrawerPanel({
         {
           key: 'privacidade',
           label: 'Privacidade',
-          description: 'Como o Capital + trata os seus dados',
+          description: 'Como o Invest + trata os seus dados',
           icon: ShieldCheck,
           tone: 'green',
           href: '/privacidade',

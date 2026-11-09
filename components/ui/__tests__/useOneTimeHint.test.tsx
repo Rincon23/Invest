@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
-import { DEFAULT_SPECIAL_CATEGORY_LABELS, type BudgetSettings } from '@/lib/budget';
+import type { AppSettings } from '@/lib/core';
 import { useOneTimeHint } from '../useOneTimeHint';
 
-const settingsState: { settings: BudgetSettings; saveSettings: ReturnType<typeof vi.fn> } = {
-  settings: { topics: [], specialCategories: DEFAULT_SPECIAL_CATEGORY_LABELS },
+const settingsState: { settings: AppSettings; saveSettings: ReturnType<typeof vi.fn> } = {
+  settings: {},
   saveSettings: vi.fn().mockResolvedValue(undefined),
 };
 vi.mock('@/components/providers/SettingsProvider', () => ({ useSettings: () => settingsState }));

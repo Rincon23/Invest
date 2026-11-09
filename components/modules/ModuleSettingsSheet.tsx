@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { ModuleKey } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import { moduleDefinition } from '@/lib/modules';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 

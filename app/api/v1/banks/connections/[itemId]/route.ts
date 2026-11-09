@@ -12,7 +12,7 @@ export const PATCH = apiRoute<Params>(async ({ request, params, banks, access })
   await banks.rename(params.itemId, name);
 });
 
-/** Takes one bank out of the Capital. */
+/** Takes one bank out of the app. */
 export const DELETE = apiRoute<Params>(async ({ params, banks, access, userId }) => {
   requireBanksAccess(await access());
   await removeConnection(banks, userId, params.itemId);

@@ -1,6 +1,6 @@
 'use client';
 
-import { formatBRL } from '@/lib/budget';
+import { formatBRL } from '@/lib/core';
 import { assetType, portfolioByType, type DiagramOverview } from '@/lib/diagram';
 import { Donut } from './Donut';
 import { pct } from './format';

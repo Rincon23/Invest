@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { BankOnlyHolding } from '@/lib/banks';
-import { parseAmountInput, todayISO } from '@/lib/budget';
+import { parseAmountInput, todayISO } from '@/lib/core';
 import {
   assetType,
   isFixedIncomeType,

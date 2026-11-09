@@ -77,7 +77,7 @@ export async function runMissingNameJob(db: Database, now: Date = new Date()): P
       sourceKey: 'profile:missing-name',
       message: {
         title: '👋 Como podemos te chamar?',
-        body: 'Coloque seu nome e sobrenome em Configurações: é ali que você muda o nome da conta. Assim os lembretes te chamam pelo nome.',
+        body: 'Coloque seu nome e sobrenome em Configurações: é ali que você muda o nome da conta. Assim o app te chama pelo nome.',
         url: '/configuracoes',
       },
     });

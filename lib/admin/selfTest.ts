@@ -1,7 +1,7 @@
 import { moduleDefinition } from '../modules';
 import type { SelfTestArea, SelfTestResult, SelfTestStatus } from './types';
 
-/** "Servidor", or the module's own name ("Cartão", "Lembretes"). */
+/** "Servidor", or the module's own name ("Diagrama", "Open Finance"). */
 export function selfTestAreaName(area: SelfTestArea): string {
   return area === 'server' ? 'Servidor' : moduleDefinition(area).name;
 }

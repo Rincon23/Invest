@@ -3,7 +3,7 @@
 import { Component, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import type { ModuleKey } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import { moduleDefinition } from '@/lib/modules';
 import { IconTile } from '@/components/ui/IconTile';
 import { MODULE_VISUALS } from '../visuals';

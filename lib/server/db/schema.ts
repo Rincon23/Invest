@@ -1,10 +1,6 @@
 /**
  * Postgres schema (Drizzle). Migrations are generated from this file with
  * `npm run db:generate` into /drizzle and applied on server start (instrumentation.ts).
- *
- * Budget data is normalized (months / incomes / expenses), but the repository
- * reassembles the exact `MonthData` shape from lib/budget, so the pure
- * calculation layer never changes because of the database.
  */
 import { sql } from 'drizzle-orm';
 import {
@@ -23,22 +19,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type {
-  CardDueMonth,
-  CategoryKind,
-  EmergencyCost,
-  ExpenseSource,
-  HomeWidgetKey,
-  InstallmentAccounting,
-  ModuleFlags,
-  ModuleKey,
-  NavKey,
-  QuickCategoryKey,
-  SpecialCategoryColors,
-  SpecialCategoryLabels,
-  Tag,
-  TopicConfig,
-} from '../../budget/types';
+import type { HomeWidgetKey, ModuleFlags, ModuleKey } from '../../core/types';
 import type {
   AutoQuestionKind,
   DiagramContributionItem,
@@ -49,13 +30,8 @@ import type {
 } from '../../diagram/types';
 import type { PricePoint } from '../../diagram/history';
 import type { SelfTestResult, SelfTestTrigger } from '../../admin/types';
-import type { BankAlertSettings } from '../../banks/alerts';
-import type { BankAccountKind, BankConnectionStatus } from '../../banks/types';
+import type { BankConnectionStatus } from '../../banks/types';
 import type { NotificationCategory } from '../../notifications/types';
-import type { ReminderKind, TimeOfDay } from '../../reminders/types';
-
-/** Every category an expense (or a template, or a plan) can have. */
-const CATEGORY_KINDS = sql`in ('topic', 'fixedCost', 'unforeseen', 'reimbursable', 'uncounted')`;
 
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -155,27 +131,20 @@ export const moduleAccess = pgTable('module_access', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+
 // ---------------------------------------------------------------------------
-// Budget
+// Each account's settings
 // ---------------------------------------------------------------------------
 
-/** One row per user: category config + special category labels/colors (the `BudgetSettings` shape). */
-export const budgetSettings = pgTable('budget_settings', {
+/** One row per account (the `AppSettings` shape). */
+export const settings = pgTable('settings', {
   userId: uuid('user_id')
     .primaryKey()
     .references(() => user.id, { onDelete: 'cascade' }),
-  topics: jsonb('topics').$type<TopicConfig[]>().notNull(),
-  specialCategories: jsonb('special_categories').$type<SpecialCategoryLabels>().notNull(),
-  specialCategoryColors: jsonb('special_category_colors')
-    .$type<Partial<SpecialCategoryColors>>()
-    .notNull()
-    .default({}),
-  /** Only a brand-new account's first row is created with false (see the repository's seed). */
+  /** Only a brand-new account's first row is created with false (it still has the welcome to see). */
   onboardingCompleted: boolean('onboarding_completed').notNull().default(true),
-  /** The modules this user turned on. Anything absent is off. */
+  /** The modules this account has; anything absent is on (only a restricted one is saved off). */
   modules: jsonb('modules').$type<Partial<ModuleFlags>>().notNull().default({}),
-  /** Obsolete: the bottom bar, from when there was one. Kept so older backups still restore; ignored. */
-  nav: jsonb('nav').$type<NavKey[]>(),
   /** Keys of the one-time notices this account already dismissed. */
   dismissedNotices: jsonb('dismissed_notices').$type<string[]>().notNull().default([]),
   /** Which notification categories push to this account's devices; absent key means on. */
@@ -183,428 +152,18 @@ export const budgetSettings = pgTable('budget_settings', {
     .$type<Partial<Record<NotificationCategory, boolean>>>()
     .notNull()
     .default({}),
-  /** Obsolete: the Início as one list, read as a single page while `homePages` is null. */
-  homeOrder: jsonb('home_order').$type<HomeWidgetKey[]>(),
   /** The áreas de trabalho of the Início and their widgets; null means the default (see `resolveHomePages`). */
   homePages: jsonb('home_pages').$type<HomeWidgetKey[][]>(),
   /** Which resizable Início cards were stretched to full width. */
   homeCardSizes: jsonb('home_card_sizes').$type<Partial<Record<HomeWidgetKey, 'half' | 'full'>>>().notNull().default({}),
   /** The widgets taken off the Início (they wait in the widget tray). */
   homeHidden: jsonb('home_hidden').$type<HomeWidgetKey[]>().notNull().default([]),
-  /** The categories the expense form shows straight away; null means the default. */
-  quickCategories: jsonb('quick_categories').$type<QuickCategoryKey[]>(),
-  /** The tags of expenses and incomes (the `Tag` shape); they change no number. */
-  tags: jsonb('tags').$type<Tag[]>().notNull().default([]),
   updatedAt: updatedAt(),
 });
 
 // ---------------------------------------------------------------------------
-// Cartoes: the registered credit cards and their bills. Defined here, before the
-// entries, because `expenses` (and the recurring templates and instalment plans)
-// point at a card.
+// Cotações: the one quote service of Invest + and Capital + (lib/server/quotes.ts)
 // ---------------------------------------------------------------------------
-
-/**
- * A credit card the person registered. Only what they typed is stored: the due date of each
- * bill, the postponement off a weekend and how late it is are computed (lib/budget/cards.ts).
- */
-export const cards = pgTable(
-  'cards',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    id: text('id').notNull(),
-    name: text('name').notNull(),
-    /** Day of the month the bill is due; a month without that day uses its last day. */
-    dueDay: integer('due_day').notNull(),
-    /** Whether the bill of a competence is due in that same month or in the next one. */
-    dueMonth: text('due_month').$type<CardDueMonth>().notNull().default('next'),
-    notifyEnabled: boolean('notify_enabled').notNull().default(true),
-    /** Extra notice before the due date, in days (0 = only on the day itself). */
-    notifyBeforeDays: integer('notify_before_days').notNull().default(1),
-    /** Pre-selected wherever a purchase picks a card; at most one per user. */
-    isDefault: boolean('is_default').notNull().default(false),
-    /** Credit limit, to show how much of it is still free; null means "not being tracked". */
-    limit: numeric('limit', { mode: 'number' }),
-    color: text('color'),
-    position: integer('position').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.id] }),
-    check('cards_due_day', sql`${t.dueDay} between 1 and 31`),
-    check('cards_due_month', sql`${t.dueMonth} in ('same', 'next')`),
-    check('cards_notify_before_days', sql`${t.notifyBeforeDays} between 0 and 30`),
-  ],
-);
-
-/**
- * "Fatura paga": one row per bill the person marked as paid. Its existence is what takes the
- * bill out of the debt — no bill in Capital ever leaves on its own, however late it gets.
- *
- * `card_id` is a registered card's id **or** `UNASSIGNED_CARD_ID` ('nao-informado'), the bill of
- * the purchases nobody said the card of, which is paid exactly like any other. That is why there
- * is no foreign key to `cards` here: deleting a card removes its paid bills in the repository
- * instead (`deleteCard`), alongside untying its purchases.
- */
-export const cardBillPayments = pgTable(
-  'card_bill_payments',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    cardId: text('card_id').notNull(),
-    month: text('month').notNull(),
-    /** What the bill was worth when it was marked as paid. */
-    amount: numeric('amount', { mode: 'number' }).notNull(),
-    paidAt: timestamp('paid_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.cardId, t.month] }),
-    check('card_bill_payments_month_format', sql`${t.month} ~ '^[0-9]{4}-[0-9]{2}$'`),
-  ],
-);
-
-/** Each user's settings for the bill notices; no row means the defaults (lib/budget/cards.ts). */
-export const cardSettings = pgTable('card_settings', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  notifyTime: text('notify_time').$type<TimeOfDay>().notNull().default('09:00'),
-  /** Keep warning once a day while the bill is not marked as paid. */
-  repeatUntilPaid: boolean('repeat_until_paid').notNull().default(true),
-  updatedAt: updatedAt(),
-});
-
-/**
- * Every bill notice already delivered, the same idea as `reminder_deliveries`: a slot is sent
- * only by whoever records it first, so a restart (or two servers) never notifies twice. Old
- * rows are pruned by the scheduler.
- */
-export const cardBillDeliveries = pgTable(
-  'card_bill_deliveries',
-  {
-    userId: uuid('user_id').notNull(),
-    cardId: text('card_id').notNull(),
-    month: text('month').notNull(),
-    slotAt: timestamp('slot_at', { withTimezone: true }).notNull(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.cardId, t.month, t.slotAt] }),
-    foreignKey({
-      columns: [t.userId, t.cardId],
-      foreignColumns: [cards.userId, cards.id],
-    }).onDelete('cascade'),
-    index('card_bill_deliveries_slot_at_idx').on(t.slotAt),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Budget (continued)
-// ---------------------------------------------------------------------------
-
-/** One row per (user, competence month "YYYY-MM"). carryIn and topicsSnapshot keep the MonthData shape. */
-export const months = pgTable(
-  'months',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    month: text('month').notNull(),
-    carryIn: jsonb('carry_in').$type<Record<string, number>>().notNull().default({}),
-    topicsSnapshot: jsonb('topics_snapshot').$type<TopicConfig[]>().notNull().default([]),
-    closed: boolean('closed').notNull().default(false),
-    closedAt: timestamp('closed_at', { withTimezone: true }),
-    /** Closed saying no to bringing the leftovers: the month after it starts without them. */
-    leftoversDropped: boolean('leftovers_dropped').notNull().default(false),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.month] }),
-    check('months_month_format', sql`${t.month} ~ '^[0-9]{4}-[0-9]{2}$'`),
-  ],
-);
-
-/**
- * Ids are the client-generated ids of the MonthData entries (text: backups and old
- * local data may carry non-UUID ids), unique per user. `position` keeps the order
- * the entries had in the month, which is the order the UI lists them in.
- */
-export const incomes = pgTable(
-  'incomes',
-  {
-    userId: uuid('user_id').notNull(),
-    id: text('id').notNull(),
-    month: text('month').notNull(),
-    source: text('source').notNull(),
-    amount: numeric('amount', { mode: 'number' }).notNull(),
-    date: date('date', { mode: 'string' }),
-    /** The one category that gets this whole income; null means split by % (see Income). */
-    topicId: text('topic_id'),
-    /** Ids of its tags (`budget_settings.tags`, kind 'income'). */
-    tagIds: jsonb('tag_ids').$type<string[]>().notNull().default([]),
-    position: integer('position').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.id] }),
-    foreignKey({
-      columns: [t.userId, t.month],
-      foreignColumns: [months.userId, months.month],
-    }).onDelete('cascade'),
-    index('incomes_user_month_idx').on(t.userId, t.month),
-  ],
-);
-
-export const expenses = pgTable(
-  'expenses',
-  {
-    userId: uuid('user_id').notNull(),
-    id: text('id').notNull(),
-    month: text('month').notNull(),
-    categoryKind: text('category_kind').$type<CategoryKind>().notNull(),
-    topicId: text('topic_id'),
-    description: text('description').notNull(),
-    amount: numeric('amount', { mode: 'number' }).notNull(),
-    date: date('date', { mode: 'string' }).notNull(),
-    /** `Expense.singleInstallmentCard`: the purchase lands on the credit-card bill. */
-    card: boolean('card').notNull().default(false),
-    /**
-     * Which registered card it landed on; null means no card in particular (see `cards`).
-     * Deliberately not a foreign key: Postgres' composite ON DELETE SET NULL would also null
-     * `user_id`, so deleting a card unties its purchases in the repository instead.
-     */
-    cardId: text('card_id'),
-    /** Where the expense came from: a form, a recurring template, an instalment, ... */
-    source: text('source').$type<ExpenseSource>(),
-    /** Set when this expense is one instalment of a plan. */
-    installmentId: text('installment_id'),
-    installmentNumber: integer('installment_number'),
-    /** When an "A receber" purchase was paid back; null means it still has not been. */
-    reimbursedAt: timestamp('reimbursed_at', { withTimezone: true }),
-    /**
-     * The recurring template it was launched from ("Contas do mês"): what marks that bill as
-     * launched in this competence. Not a foreign key, like `card_id`: deleting a template keeps
-     * its expenses, which simply stop pointing anywhere.
-     */
-    recurringId: text('recurring_id'),
-    /** Ids of its tags (`budget_settings.tags`, kind 'expense'). They change no number. */
-    tagIds: jsonb('tag_ids').$type<string[]>().notNull().default([]),
-    position: integer('position').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.id] }),
-    foreignKey({
-      columns: [t.userId, t.month],
-      foreignColumns: [months.userId, months.month],
-    }).onDelete('cascade'),
-    index('expenses_user_month_idx').on(t.userId, t.month),
-    index('expenses_user_card_idx').on(t.userId, t.cardId),
-    index('expenses_user_recurring_idx').on(t.userId, t.recurringId),
-    // One expense per instalment, ever: launching the same charge twice is impossible.
-    // (Rows with no instalment are unaffected — NULLs never collide in Postgres.)
-    unique('expenses_installment_unique').on(t.userId, t.installmentId, t.installmentNumber),
-    check('expenses_category_kind', sql`${t.categoryKind} ${CATEGORY_KINDS}`),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Carteira: recurring expenses, instalment plans, invested reserve and cash
-// ---------------------------------------------------------------------------
-
-/** Templates for the expenses that repeat every month, launched with one tap. */
-export const recurringExpenses = pgTable(
-  'recurring_expenses',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    id: text('id').notNull(),
-    categoryKind: text('category_kind').$type<CategoryKind>().notNull(),
-    topicId: text('topic_id'),
-    description: text('description').notNull(),
-    amount: numeric('amount', { mode: 'number' }).notNull(),
-    card: boolean('card').notNull().default(false),
-    cardId: text('card_id'),
-    /** In how many times a launch of this template is split; null means à vista. */
-    installmentCount: integer('installment_count'),
-    installmentAccounting: text('installment_accounting').$type<InstallmentAccounting>(),
-    /** The day of the month it falls due (1–31); null when the person did not say. */
-    dueDay: integer('due_day'),
-    /** Tags the expense launched from it is born with. */
-    tagIds: jsonb('tag_ids').$type<string[]>().notNull().default([]),
-    position: integer('position').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.id] }),
-    check('recurring_expenses_category_kind', sql`${t.categoryKind} ${CATEGORY_KINDS}`),
-    check(
-      'recurring_expenses_installment_accounting',
-      sql`${t.installmentAccounting} is null or ${t.installmentAccounting} in ('installment', 'upfront')`,
-    ),
-    check(
-      'recurring_expenses_installment_count',
-      sql`${t.installmentCount} is null or (${t.installmentCount} >= 2 and ${t.installmentCount} <= 120)`,
-    ),
-    check('recurring_expenses_due_day', sql`${t.dueDay} is null or (${t.dueDay} >= 1 and ${t.dueDay} <= 31)`),
-  ],
-);
-
-/**
- * The notice of "Contas do mês": the time of day it goes out and whether it keeps reminding,
- * once a day for a few days, while a bill that fell due is not launched. One row per user, created
- * on the first save; until then the defaults apply.
- */
-export const recurringSettings = pgTable('recurring_settings', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  notifyEnabled: boolean('notify_enabled').notNull().default(true),
-  notifyTime: text('notify_time').$type<TimeOfDay>().notNull().default('09:00'),
-  /** Keep warning once a day, for a few days, while the bill is not launched. */
-  repeatUntilLaunched: boolean('repeat_until_launched').notNull().default(true),
-  updatedAt: updatedAt(),
-});
-
-/**
- * Every "Contas do mês" notice already delivered, like `card_bill_deliveries`: a slot is sent only
- * by whoever records it first, so a restart never notifies twice. Old rows are pruned.
- */
-export const recurringDeliveries = pgTable(
-  'recurring_deliveries',
-  {
-    userId: uuid('user_id').notNull(),
-    recurringId: text('recurring_id').notNull(),
-    month: text('month').notNull(),
-    slotAt: timestamp('slot_at', { withTimezone: true }).notNull(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.recurringId, t.month, t.slotAt] }),
-    foreignKey({
-      columns: [t.userId, t.recurringId],
-      foreignColumns: [recurringExpenses.userId, recurringExpenses.id],
-    }).onDelete('cascade'),
-  ],
-);
-
-/**
- * A purchase split into monthly charges. Only what the user typed is stored: due dates, the
- * instalment value, how many are left and the end date are always computed.
- */
-export const installments = pgTable(
-  'installments',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    id: text('id').notNull(),
-    name: text('name').notNull(),
-    categoryKind: text('category_kind').$type<CategoryKind>().notNull(),
-    topicId: text('topic_id'),
-    firstDebitDate: date('first_debit_date', { mode: 'string' }).notNull(),
-    /** The day of the purchase itself: where an "à vista" plan lands in the budget. */
-    purchaseDate: date('purchase_date', { mode: 'string' }),
-    count: integer('count').notNull(),
-    totalAmount: numeric('total_amount', { mode: 'number' }).notNull(),
-    accounting: text('accounting').$type<InstallmentAccounting>().notNull(),
-    cardId: text('card_id'),
-    /** Charges already paid before the purchase was registered here; they touch no month. */
-    paidCount: integer('paid_count').notNull().default(0),
-    /** Charges paid ahead of time ("adiantar parcelas"); they leave the bill the same way. */
-    advancedCount: integer('advanced_count').notNull().default(0),
-    /** The recurring template it was launched from, when it was (see `expenses.recurring_id`). */
-    recurringId: text('recurring_id'),
-    /** Tags every charge of the purchase is born with. */
-    tagIds: jsonb('tag_ids').$type<string[]>().notNull().default([]),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.id] }),
-    check('installments_category_kind', sql`${t.categoryKind} ${CATEGORY_KINDS}`),
-    check('installments_accounting', sql`${t.accounting} in ('installment', 'upfront')`),
-    check('installments_count', sql`${t.count} > 0`),
-    check('installments_paid_count', sql`${t.paidCount} >= 0 and ${t.paidCount} <= ${t.count}`),
-    check(
-      'installments_advanced_count',
-      sql`${t.advancedCount} >= 0 and ${t.paidCount} + ${t.advancedCount} <= ${t.count}`,
-    ),
-  ],
-);
-
-/**
- * O plano de recompor a reserva de emergência: um por conta. Guarda só o que a pessoa decidiu
- * (quanto e em quantos meses); o progresso vem sempre da soma das parcelas lançadas.
- */
-export const reservePlans = pgTable('reserve_plans', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  targetAmount: numeric('target_amount', { mode: 'number' }).notNull(),
-  months: integer('months').notNull(),
-  startMonth: text('start_month').notNull(),
-  reason: text('reason'),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
-
-/** Cada parcela do plano que foi lançada, com o gasto que ela criou. */
-export const reserveContributions = pgTable(
-  'reserve_contributions',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    id: text('id').notNull(),
-    month: text('month').notNull(),
-    amount: numeric('amount', { mode: 'number' }).notNull(),
-    date: date('date', { mode: 'string' }).notNull(),
-    /** O gasto que este lançamento criou, para a tela poder abri-lo. */
-    expenseId: text('expense_id').notNull(),
-    createdAt: createdAt(),
-  },
-  (t) => [primaryKey({ columns: [t.userId, t.id] })],
-);
-
-/** One row per user: the ticker used as an invested reserve and how many quotas are held. */
-export const investmentReserves = pgTable('investment_reserves', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  ticker: text('ticker').notNull(),
-  totalQuotas: numeric('total_quotas', { precision: 18, scale: 8, mode: 'number' })
-    .notNull()
-    .default(0),
-  updatedAt: updatedAt(),
-});
-
-/** Quotas of the reserve earmarked for a topic (shown as "categoria" in the app). */
-export const investmentBuckets = pgTable(
-  'investment_buckets',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    id: text('id').notNull(),
-    name: text('name').notNull(),
-    topicId: text('topic_id'),
-    quotas: numeric('quotas', { precision: 18, scale: 8, mode: 'number' }).notNull().default(0),
-    position: integer('position').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [primaryKey({ columns: [t.userId, t.id] })],
-);
 
 /**
  * Last known price per ticker (B3 code, no ".SA"). Global — a price is not personal — so a
@@ -639,16 +198,6 @@ export const priceHistoryCache = pgTable(
   (t) => [primaryKey({ columns: [t.symbol, t.range] })],
 );
 
-/** What the cash report needs from each user. */
-export const cashSettings = pgTable('cash_settings', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  reserveAccountAmount: numeric('reserve_account_amount', { mode: 'number' }).notNull().default(0),
-  emergencyCosts: jsonb('emergency_costs').$type<EmergencyCost[]>().notNull().default([]),
-  reserveMultiplier: integer('reserve_multiplier').notNull().default(6),
-  updatedAt: updatedAt(),
-});
 
 // ---------------------------------------------------------------------------
 // Notifications (Web Push)
@@ -715,202 +264,12 @@ export const notifications = pgTable(
   ],
 );
 
-// ---------------------------------------------------------------------------
-// Lembretes
-// ---------------------------------------------------------------------------
-
-/**
- * A reminder or a daily task. Which columns are used depends on `kind`: once → date + time
- * (+ notify_before_minutes), daily → times, weekly → weekdays + time, monthly → day_of_month +
- * time. Due days are always computed (lib/reminders), never stored ahead.
- */
-export const reminders = pgTable(
-  'reminders',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    id: text('id').notNull(),
-    kind: text('kind').$type<ReminderKind>().notNull(),
-    message: text('message').notNull(),
-    date: date('date', { mode: 'string' }),
-    time: text('time').$type<TimeOfDay>(),
-    times: jsonb('times').$type<TimeOfDay[]>().notNull().default([]),
-    weekdays: jsonb('weekdays').$type<number[]>().notNull().default([]),
-    dayOfMonth: integer('day_of_month'),
-    notifyBeforeMinutes: integer('notify_before_minutes'),
-    repeat: boolean('repeat').notNull().default(true),
-    /** Daily tasks only: when it was done (and so archived). */
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.id] }),
-    check('reminders_kind', sql`${t.kind} in ('once', 'daily', 'weekly', 'monthly')`),
-  ],
-);
-
-/** "Realizado" for one due day of a once / weekly / monthly reminder. */
-export const reminderCompletions = pgTable(
-  'reminder_completions',
-  {
-    userId: uuid('user_id').notNull(),
-    reminderId: text('reminder_id').notNull(),
-    dueDate: date('due_date', { mode: 'string' }).notNull(),
-    doneAt: timestamp('done_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.reminderId, t.dueDate] }),
-    foreignKey({
-      columns: [t.userId, t.reminderId],
-      foreignColumns: [reminders.userId, reminders.id],
-    }).onDelete('cascade'),
-  ],
-);
-
-/** Each user's reminder preferences; no row means the defaults (lib/reminders/types.ts). */
-export const reminderSettings = pgTable('reminder_settings', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  repeatEnabled: boolean('repeat_enabled').notNull().default(true),
-  repeatTimes: jsonb('repeat_times').$type<TimeOfDay[]>().notNull(),
-  updatedAt: updatedAt(),
-});
-
-/**
- * Every notification slot already delivered. The primary key is what makes the scheduler safe to
- * run again (after a restart, or twice at once): a slot is sent only by whoever records it first.
- * Old rows are pruned by the scheduler.
- */
-export const reminderDeliveries = pgTable(
-  'reminder_deliveries',
-  {
-    userId: uuid('user_id').notNull(),
-    reminderId: text('reminder_id').notNull(),
-    slotAt: timestamp('slot_at', { withTimezone: true }).notNull(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.reminderId, t.slotAt] }),
-    foreignKey({
-      columns: [t.userId, t.reminderId],
-      foreignColumns: [reminders.userId, reminders.id],
-    }).onDelete('cascade'),
-    index('reminder_deliveries_slot_at_idx').on(t.slotAt),
-  ],
-);
 
 /** When each background job last ran (the scheduler picks up from there after a restart). */
 export const jobRuns = pgTable('job_runs', {
   name: text('name').primaryKey(),
   lastRunAt: timestamp('last_run_at', { withTimezone: true }).notNull(),
 });
-
-/**
- * The "Você sabia?" (lib/motivation): the same for everyone, edited by the owner in Administração.
- * The first read fills it with `DEFAULT_FACTS`, and it never goes back to empty.
- */
-export const investingFacts = pgTable('investing_facts', {
-  id: text('id').primaryKey(),
-  position: integer('position').notNull(),
-  text: text('text').notNull(),
-  detail: text('detail').notNull(),
-  sourceLabel: text('source_label').notNull(),
-  sourceUrl: text('source_url'),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Missões (lib/gamification)
-// ---------------------------------------------------------------------------
-
-/**
- * The XP an account earned: one row per mission per period ("2026-10-26" for a day, "2026-W44" for
- * a week, "2026-10" for a month, "once"). The primary key is what makes a mission count only once
- * per period, whatever the app sends; its leading `user_id` also serves the per-account reads and
- * the cascade. A row is never deleted when the thing that earned it is: XP never goes down.
- */
-export const xpEvents = pgTable(
-  'xp_events',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    mission: text('mission').notNull(),
-    period: text('period').notNull(),
-    xp: integer('xp').notNull(),
-    earnedAt: timestamp('earned_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [primaryKey({ columns: [t.userId, t.mission, t.period] }), check('xp_events_xp_positive', sql`${t.xp} > 0`)],
-);
-
-// ---------------------------------------------------------------------------
-// Monitor de Gmail — retired from the app (2026-10-28): nothing reads or writes these tables any
-// more but "Apagar todos os dados", which still erases what an account left. They stay until
-// that data is dropped.
-// ---------------------------------------------------------------------------
-
-/**
- * The Gmail account connected with "Login com Google" (read-only scope). The refresh token is
- * stored encrypted (AES-256-GCM with ENCRYPTION_KEY); `last_history_id` is where the next check
- * starts, so only e-mails received after it are read.
- */
-export const gmailAccounts = pgTable(
-  'gmail_accounts',
-  {
-    userId: uuid('user_id')
-      .primaryKey()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    email: text('email').notNull(),
-    refreshToken: text('refresh_token').notNull(),
-    lastHistoryId: text('last_history_id'),
-    /** ok, error (the last check failed, it tries again) or reconnect (Google refused the token). */
-    status: text('status').$type<'ok' | 'error' | 'reconnect'>().notNull().default('ok'),
-    lastError: text('last_error'),
-    lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),
-    connectedAt: timestamp('connected_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [check('gmail_accounts_status', sql`${t.status} in ('ok', 'error', 'reconnect')`)],
-);
-
-export const gmailKeywords = pgTable(
-  'gmail_keywords',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    id: uuid('id').notNull().defaultRandom(),
-    keyword: text('keyword').notNull(),
-    createdAt: createdAt(),
-  },
-  (t) => [primaryKey({ columns: [t.userId, t.id] })],
-);
-
-/**
- * One row per e-mail that matched (correction 13): the primary key is what keeps an e-mail from
- * being notified twice, and the rows are the history shown on the screen.
- */
-export const gmailAlerts = pgTable(
-  'gmail_alerts',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    messageId: text('message_id').notNull(),
-    keywords: jsonb('keywords').$type<string[]>().notNull(),
-    subject: text('subject').notNull(),
-    from: text('from').notNull(),
-    receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
-    notifiedAt: timestamp('notified_at', { withTimezone: true }),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.messageId] }),
-    index('gmail_alerts_user_received_idx').on(t.userId, t.receivedAt),
-  ],
-);
 
 // ---------------------------------------------------------------------------
 // Open Finance (lib/server/banks): each person's own Meu Pluggy key and the banks they brought
@@ -933,7 +292,7 @@ export const bankKeys = pgTable('bank_keys', {
 });
 
 /**
- * One bank the person brought: a Pluggy item of the Meu Pluggy connector, created by the Capital
+ * One bank the person brought: a Pluggy item of the Meu Pluggy connector, created by the Invest +
  * (Pluggy's free plan can't list them, so this table is the only record of their ids). `name` is
  * the person's own; until they give one, the screen shows `suggested_name`.
  */
@@ -953,11 +312,11 @@ export const bankConnections = pgTable(
     nextAutoSyncAt: timestamp('next_auto_sync_at', { withTimezone: true }),
     consentExpiresAt: timestamp('consent_expires_at', { withTimezone: true }),
     /**
-     * The `last_updated_at` whose accounts and transactions the Capital already read: the sync
+     * The `last_updated_at` whose investments the Invest + already read: the sync
      * only reads them again when Pluggy has newer data than this.
      */
     syncedUpdateAt: timestamp('synced_update_at', { withTimezone: true }),
-    /** When the Capital last asked Pluggy about this bank. */
+    /** When the Invest + last asked Pluggy about this bank. */
     checkedAt: timestamp('checked_at', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -968,72 +327,6 @@ export const bankConnections = pgTable(
   ],
 );
 
-/** The accounts and cards a connection brought, with the balance of the last read. */
-export const bankAccounts = pgTable(
-  'bank_accounts',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    accountId: text('account_id').notNull(),
-    itemId: text('item_id').notNull(),
-    kind: text('kind').$type<BankAccountKind>().notNull(),
-    name: text('name').notNull(),
-    /** For a card, what is owed on it (Pluggy's balance of a credit account). */
-    balance: numeric('balance', { mode: 'number' }),
-    currency: text('currency'),
-    /** When the bank sent this balance (the connection's `last_updated_at` of the read). */
-    balanceAt: timestamp('balance_at', { withTimezone: true }),
-    creditLimit: numeric('credit_limit', { mode: 'number' }),
-    availableCredit: numeric('available_credit', { mode: 'number' }),
-    dueDate: date('due_date', { mode: 'string' }),
-    /** The person marked it as part of their reserve (the Reserva's "Reserva em conta"). */
-    feedsReserve: boolean('feeds_reserve').notNull().default(false),
-    /** A card: the Capital card its purchases go on (null with `card_linked`: "não informado"). */
-    capitalCardId: text('capital_card_id'),
-    /** Whether the person already said which Capital card this is. */
-    cardLinked: boolean('card_linked').notNull().default(false),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.accountId] }),
-    foreignKey({
-      columns: [t.userId, t.itemId],
-      foreignColumns: [bankConnections.userId, bankConnections.itemId],
-    }).onDelete('cascade'),
-    check('bank_accounts_kind', sql`${t.kind} in ('checking', 'savings', 'card', 'other')`),
-  ],
-);
-
-/**
- * What the person chose for a description before ("Confira os gastos"): the next transaction
- * that reads the same is suggested the same category.
- */
-export const bankCategoryMemory = pgTable(
-  'bank_category_memory',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    /** The description without numbers and instalment marks (lib/banks/review.ts `memoryKey`). */
-    key: text('key').notNull(),
-    categoryKind: text('category_kind').$type<CategoryKind>().notNull(),
-    topicId: text('topic_id'),
-    updatedAt: updatedAt(),
-  },
-  (t) => [primaryKey({ columns: [t.userId, t.key] })],
-);
-
-/** The person's Open Finance choices that outlive any key or bank: what to alert about. */
-export const bankSettings = pgTable('bank_settings', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  /** `BankAlertSettings` (lib/banks/alerts.ts); missing fields take the defaults. */
-  alerts: jsonb('alerts').$type<Partial<BankAlertSettings>>().notNull().default({}),
-  updatedAt: updatedAt(),
-});
 
 /** The investments a connection brought (fixed income, funds, stocks), with the last balance read. */
 export const bankInvestments = pgTable(
@@ -1055,7 +348,6 @@ export const bankInvestments = pgTable(
     quantity: numeric('quantity', { precision: 24, scale: 8, mode: 'number' }),
     balance: numeric('balance', { mode: 'number' }),
     balanceAt: timestamp('balance_at', { withTimezone: true }),
-    feedsReserve: boolean('feeds_reserve').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -1068,93 +360,9 @@ export const bankInvestments = pgTable(
   ],
 );
 
-/**
- * What the banks sent, one row per Pluggy transaction (its id is the key: a read never adds it
- * twice, and a later read updates it, pending → posted). Not an entry of the budget: `outcome`
- * and `entry_id` say what it became in the Capital, once the person reviews it.
- * On a card, a purchase is positive and a payment negative, as Pluggy sends them.
- */
-export const bankTransactions = pgTable(
-  'bank_transactions',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    transactionId: text('transaction_id').notNull(),
-    accountId: text('account_id').notNull(),
-    /** The day, in São Paulo. */
-    date: date('date', { mode: 'string' }).notNull(),
-    amount: numeric('amount', { mode: 'number' }).notNull(),
-    currency: text('currency'),
-    description: text('description').notNull(),
-    descriptionRaw: text('description_raw'),
-    /** CREDIT (money in; on a card, a payment or refund) or DEBIT. */
-    type: text('type').notNull(),
-    /** PENDING or POSTED. On a card, PENDING means "not in a closed bill yet". */
-    status: text('status').notNull(),
-    category: text('category'),
-    operationType: text('operation_type'),
-    paymentMethod: text('payment_method'),
-    payerName: text('payer_name'),
-    payerDocument: text('payer_document'),
-    receiverName: text('receiver_name'),
-    receiverDocument: text('receiver_document'),
-    merchantName: text('merchant_name'),
-    installmentNumber: integer('installment_number'),
-    totalInstallments: integer('total_installments'),
-    purchaseDate: date('purchase_date', { mode: 'string' }),
-    billId: text('bill_id'),
-    /**
-     * Null until reviewed ("Confira os gastos"): `expense`, `plan` or `income` (launched from it),
-     * `linked` (it was an entry already there), `ignored`, `bill` (it paid a bill), and
-     * `launching` for the moment it is being launched (what keeps it from becoming two entries).
-     */
-    outcome: text('outcome'),
-    /** The expense, income or purchase plan it became or was tied to (their ids are text). */
-    entryId: text('entry_id'),
-    /** The month of that expense or income. */
-    entryMonth: text('entry_month'),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.transactionId] }),
-    foreignKey({
-      columns: [t.userId, t.accountId],
-      foreignColumns: [bankAccounts.userId, bankAccounts.accountId],
-    }).onDelete('cascade'),
-    index('bank_transactions_user_date_idx').on(t.userId, t.date),
-  ],
-);
-
-/**
- * A bank transaction tied by hand to entries of the Capital ("Procurar nos gastos"): one or more
- * (a R$ 200 purchase is two "A receber" of R$ 100), covering it in full or in part. Whether it
- * confers is worked out on every read from the entries' amounts; removing the rows undoes it.
- */
-export const bankLinks = pgTable(
-  'bank_links',
-  {
-    userId: uuid('user_id').notNull(),
-    transactionId: text('transaction_id').notNull(),
-    /** An expense (an "A receber" too) or an income. */
-    entryId: text('entry_id').notNull(),
-    entryMonth: text('entry_month').notNull(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.transactionId, t.entryId] }),
-    foreignKey({
-      columns: [t.userId, t.transactionId],
-      foreignColumns: [bankTransactions.userId, bankTransactions.transactionId],
-    }).onDelete('cascade'),
-  ],
-);
-
 // ---------------------------------------------------------------------------
 // Diagrama (lib/diagram): targets per type, assets with scores, fixed-income totals, the
-// questions of each type and the aportes registered. Separate from the Reserva investida and from
-// the Reserva de emergência.
+// questions of each type and the aportes registered.
 // ---------------------------------------------------------------------------
 
 /** The types that have questions; assets can be of any type (fixed income has funds too). */
@@ -1301,13 +509,33 @@ export const diagramContributions = pgTable(
     date: date('date', { mode: 'string' }).notNull(),
     amount: numeric('amount', { mode: 'number' }).notNull(),
     items: jsonb('items').$type<DiagramContributionItem[]>().notNull(),
-    /** The expense launched in Investimentos with it, when the person asked for one. */
-    expenseId: text('expense_id'),
     createdAt: createdAt(),
   },
   (t) => [
     primaryKey({ columns: [t.userId, t.id] }),
     index('diagram_contributions_user_date_idx').on(t.userId, t.date),
+  ],
+);
+
+
+/**
+ * "Fora do Diagrama": what a bank holds of a B3 ticker that is not the Diagrama's (the Reserva of
+ * the Capital +, a position kept apart). The check against the banks leaves it out. `quantity`
+ * null means all of it; otherwise only that many shares or quotas.
+ */
+export const diagramOutside = pgTable(
+  'diagram_outside',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    ticker: text('ticker').notNull(),
+    quantity: numeric('quantity', { precision: 24, scale: 8, mode: 'number' }),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.ticker] }),
+    check('diagram_outside_quantity', sql`${t.quantity} is null or ${t.quantity} > 0`),
   ],
 );
 

@@ -47,8 +47,12 @@ export interface DiagramRepository {
   refreshQuotes(): Promise<{ updated: number; missing: string[] }>;
   searchTickers(type: AssetType, query: string): Promise<TickerSuggestion[]>;
   contribute(input: ContributeInput): Promise<DiagramContribution>;
-  /** Past prices of the assets (Histórico → Investimentos). */
+  /** Past prices of the assets (Histórico). */
   getHistory(range: HistoryRange): Promise<PriceHistory>;
+  /** "Fora do Diagrama": all the banks hold of the ticker (null) or that many shares. */
+  setOutside(ticker: string, quantity: number | null): Promise<void>;
+  /** The ticker goes back to being checked in full. */
+  removeOutside(ticker: string): Promise<void>;
 }
 
 export class HttpDiagramRepository implements DiagramRepository {
@@ -127,5 +131,13 @@ export class HttpDiagramRepository implements DiagramRepository {
 
   getHistory(range: HistoryRange): Promise<PriceHistory> {
     return apiRequest('GET', `/diagram/history?periodo=${seg(range)}`);
+  }
+
+  setOutside(ticker: string, quantity: number | null): Promise<void> {
+    return apiRequest('PUT', '/diagram/outside', { ticker, quantity });
+  }
+
+  removeOutside(ticker: string): Promise<void> {
+    return apiRequest('DELETE', `/diagram/outside/${seg(ticker)}`);
   }
 }

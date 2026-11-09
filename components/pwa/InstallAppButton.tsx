@@ -49,7 +49,7 @@ export function InstallAppButton({ className = '' }: { className?: string }) {
       <BottomSheet
         open={howToOpen}
         onClose={() => setHowToOpen(false)}
-        title="Instalar o Capital +"
+        title="Instalar o Invest +"
         confirmDiscard={false}
       >
         <HowToInstall platform={platform} canPrompt={canPrompt} onPrompt={() => void handleClick()} />
@@ -80,7 +80,7 @@ function HowToInstall({
             Toque em <strong>Adicionar</strong>.
           </>,
           <>
-            Abra o Capital&nbsp;+ pelo <strong>ícone novo</strong> e entre na sua conta de novo.
+            Abra o Invest&nbsp;+ pelo <strong>ícone novo</strong> e entre na sua conta de novo.
           </>,
           <>
             Para receber os avisos, toque no <strong>sino</strong>, na <strong>engrenagem</strong> e em{' '}

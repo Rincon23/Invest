@@ -5,7 +5,7 @@ import { LoginScreen } from '@/components/screens/LoginScreen';
 import { getAuth } from '@/lib/server/auth';
 
 export const metadata: Metadata = {
-  title: 'Entrar — Capital +',
+  title: 'Entrar — Invest +',
 };
 
 // Always rendered per request (it reads the session); never prerendered at build time.

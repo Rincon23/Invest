@@ -1,4 +1,4 @@
-import type { BudgetSettings, ModuleFlags, ModuleKey } from '../budget/types';
+import type { AppSettings, ModuleFlags, ModuleKey } from '../core/types';
 import { MODULES, MODULE_KEYS, moduleDefinition } from './catalog';
 
 /**
@@ -10,7 +10,7 @@ export const ALL_MODULES: ModuleFlags = Object.fromEntries(
   MODULE_KEYS.map((key) => [key, true]),
 ) as unknown as ModuleFlags;
 
-type FlagsSource = Pick<BudgetSettings, 'modules'> | Partial<ModuleFlags> | null | undefined;
+type FlagsSource = Pick<AppSettings, 'modules'> | Partial<ModuleFlags> | null | undefined;
 
 /**
  * The flags as saved, before any dependency is taken into account. Absent means on: the server
@@ -106,7 +106,7 @@ export function effectiveModules(access: ModuleAccess): ModuleFlags {
  * from an older app, access given or taken back): nothing the person sends can turn a module off,
  * and nothing turns a restricted one on.
  */
-export function withAccessRules<T extends Pick<BudgetSettings, 'modules'>>(settings: T, access: ModuleAccess): T {
+export function withAccessRules<T extends Pick<AppSettings, 'modules'>>(settings: T, access: ModuleAccess): T {
   return { ...settings, modules: effectiveModules(access) };
 }
 

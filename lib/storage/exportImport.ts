@@ -7,7 +7,7 @@ export function downloadBackup(payload: BackupPayload): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `capital-backup-${payload.exportedAt.slice(0, 10)}.json`;
+  a.download = `invest-backup-${payload.exportedAt.slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -16,7 +16,7 @@ export function downloadBackup(payload: BackupPayload): void {
 
 export class InvalidBackupFileError extends Error {
   constructor() {
-    super('Arquivo inválido. Selecione um backup JSON exportado pelo Capital +.');
+    super('Arquivo inválido. Selecione um backup JSON exportado pelo Invest +.');
     this.name = 'InvalidBackupFileError';
   }
 }
@@ -25,10 +25,11 @@ function isBackupPayload(value: unknown): value is BackupPayload {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Record<string, unknown>;
   return (
-    [1, 2, 3, 4].includes(candidate.version as number) &&
+    candidate.version === 1 &&
     typeof candidate.exportedAt === 'string' &&
     typeof candidate.settings === 'object' &&
-    Array.isArray(candidate.months)
+    typeof candidate.diagram === 'object' &&
+    candidate.diagram !== null
   );
 }
 

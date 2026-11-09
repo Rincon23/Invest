@@ -1,8 +1,8 @@
 // Generates the PWA/app icons in /public (plus app/icon.png and app/apple-icon.png) from inline SVG sources.
 // Run with: node scripts/generate-icons.mjs
 //
-// The mark is "Capital +": a white C with a black outline, centred, and a small yellow "+" raised at
-// its top-right like an exponent.
+// The mark is "Invest +": a white I with a black outline, on an orange background, and a small yellow
+// "+" raised at its top-right like an exponent — the same style as the Capital + icon (white C on green).
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,8 +18,8 @@ const OUTLINE = 11;
 const DEFS = `
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#22a35a" />
-      <stop offset="1" stop-color="#0a5730" />
+      <stop offset="0" stop-color="#fb923c" />
+      <stop offset="1" stop-color="#c2410c" />
     </linearGradient>
     <linearGradient id="gold" gradientUnits="userSpaceOnUse" x1="-40" y1="-80" x2="40" y2="80">
       <stop offset="0" stop-color="#fde68a" />
@@ -29,26 +29,24 @@ const DEFS = `
   </defs>
 `;
 
-/** Ring of radii R/r opening to the right by ±`open` degrees, centred on 0,0. */
-function cPath(R, r, open) {
-  const p = (rad, a) => [rad * Math.cos((a * Math.PI) / 180), -rad * Math.sin((a * Math.PI) / 180)];
-  const [x0, y0] = p(R, open);
-  const [x1, y1] = p(R, -open);
-  const [x2, y2] = p(r, -open);
-  const [x3, y3] = p(r, open);
-  return `M${x0} ${y0} A${R} ${R} 0 1 0 ${x1} ${y1} L${x2} ${y2} A${r} ${r} 0 1 1 ${x3} ${y3} Z`;
+/** A capital I with serifs, `w` wide and `h` tall, centred on 0,0. */
+function iPath(w, h, stem, serif) {
+  const x = w / 2;
+  const y = h / 2;
+  const s = stem / 2;
+  return `M${-x} ${-y} H${x} V${-y + serif} H${s} V${y - serif} H${x} V${y} H${-x} V${y - serif} H${-s} V${-y + serif} H${-x} Z`;
 }
 
-const C_PATH = cPath(172, 96, 36);
+const LETTER_PATH = iPath(212, 340, 90, 70);
 const PLUS_PATH = 'M-32 0 H32 M0 -32 V32';
 
-/** The C and the "+", in the 512 grid, centred on the C; `scale` shrinks it for safe zones. */
+/** The I and the "+", in the 512 grid; `scale` shrinks it for safe zones. */
 function mark(scale, { fill = '#ffffff', plus = 'url(#gold)', ink = INK } = {}) {
   return `
-    <g transform="translate(256 256) scale(${scale})">
-      <path d="${C_PATH}" fill="${ink}" stroke="${ink}" stroke-width="${OUTLINE * 2}" stroke-linejoin="round" />
-      <path d="${C_PATH}" fill="${fill}" />
-      <g transform="translate(176 -158)">
+    <g transform="translate(256 256) scale(${scale}) translate(-26 14)">
+      <path d="${LETTER_PATH}" fill="${ink}" stroke="${ink}" stroke-width="${OUTLINE * 2}" stroke-linejoin="round" />
+      <path d="${LETTER_PATH}" fill="${fill}" />
+      <g transform="translate(176 -176)">
         <path d="${PLUS_PATH}" fill="none" stroke="${ink}" stroke-width="${23 + OUTLINE * 2}" stroke-linecap="round" />
         <path d="${PLUS_PATH}" fill="none" stroke="${plus}" stroke-width="23" stroke-linecap="round" />
       </g>
@@ -80,12 +78,12 @@ function roundedSvg() {
 
 /**
  * Notification badge (Android status bar): the system only uses the alpha channel, so it is the
- * C and the "+" in plain white on transparency, without the outline.
+ * I and the "+" in plain white on transparency, without the outline.
  */
 function badgeSvg() {
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-      <g transform="translate(-24 20)">${mark(1, { plus: '#fff', ink: 'none' })}</g>
+      <g>${mark(1, { plus: '#fff', ink: 'none' })}</g>
     </svg>
   `;
 }

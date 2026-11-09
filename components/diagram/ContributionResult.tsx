@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Minus, Plus, RotateCcw } from 'lucide-react';
-import { amountToInputValue, currentMonthKey, formatBRL, parseAmountInput, todayISO } from '@/lib/budget';
+import { amountToInputValue, formatBRL, parseAmountInput, todayISO } from '@/lib/core';
 import {
   assetType,
   buildPlan,
@@ -75,12 +75,9 @@ function lineQuantity(line: PlanLine): string | null {
  */
 export function ContributionResult({
   basis,
-  launchAvailable,
   onChanged,
 }: {
   basis: { input: PlanInput; overview: DiagramOverview };
-  /** Lançamentos is on: "Lançar em Investimentos" can be offered. */
-  launchAvailable: boolean;
   onChanged: () => Promise<unknown>;
 }) {
   const suggested = useMemo(() => suggestQuantities(basis.input), [basis.input]);
@@ -299,7 +296,6 @@ export function ContributionResult({
         <ContributeSheet
           lines={contributing === 'all' ? pending : [contributing]}
           single={contributing !== 'all'}
-          launchAvailable={launchAvailable}
           onClose={() => setContributing(null)}
           onDone={async (confirmedLines) => {
             setQuantities((current) => ({
@@ -428,13 +424,11 @@ function Report({
 function ContributeSheet({
   lines,
   single,
-  launchAvailable,
   onClose,
   onDone,
 }: {
   lines: PlanLine[];
   single: boolean;
-  launchAvailable: boolean;
   onClose: () => void;
   onDone: (lines: PlanLine[]) => Promise<void>;
 }) {
@@ -443,7 +437,6 @@ function ContributeSheet({
   const [quantity, setQuantity] = useState(
     first.unit === 'money' ? amountToInputValue(first.quantity) : String(first.quantity).replace('.', ','),
   );
-  const [launch, setLaunch] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const edited: PlanLine[] = single
@@ -477,13 +470,11 @@ function ContributeSheet({
           try {
             await diagramRepository.contribute({
               date: todayISO(),
-              month: currentMonthKey(),
               items: edited.map((line) => ({
                 ...(line.unit === 'money' ? {} : { assetId: line.id }),
                 type: line.type,
                 quantity: line.quantity,
               })),
-              launchExpense: launch,
             });
             showToast(
               single
@@ -537,23 +528,6 @@ function ContributeSheet({
           As cotas são somadas à sua carteira com a data de hoje, e o aporte fica no histórico.
           {!single && ` Total: ${formatBRL(total)}.`}
         </p>
-
-        {launchAvailable && (
-          <label className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              checked={launch}
-              onChange={(event) => setLaunch(event.target.checked)}
-              className="accent-primary mt-0.5 h-5 w-5 shrink-0"
-            />
-            <span className="flex flex-col">
-              <span className="text-foreground text-sm font-medium">Lançar em Investimentos</span>
-              <span className="text-muted text-xs">
-                Lança {formatBRL(total)} em Investimentos, com a data de hoje.
-              </span>
-            </span>
-          </label>
-        )}
 
         <button
           type="submit"

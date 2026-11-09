@@ -14,7 +14,7 @@ export async function isPasswordPwned(password: string): Promise<boolean> {
   try {
     const hash = createHash('sha1').update(password, 'utf8').digest('hex').toUpperCase();
     const response = await fetch(`https://api.pwnedpasswords.com/range/${hash.slice(0, 5)}`, {
-      headers: { 'Add-Padding': 'true', 'User-Agent': 'Capital' },
+      headers: { 'Add-Padding': 'true', 'User-Agent': 'Invest' },
       signal: AbortSignal.timeout(TIMEOUT_MS),
       cache: 'no-store',
     });

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ResetPasswordScreen } from '@/components/screens/ResetPasswordScreen';
 
 export const metadata: Metadata = {
-  title: 'Nova senha — Capital +',
+  title: 'Nova senha — Invest +',
 };
 
 /**

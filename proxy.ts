@@ -12,18 +12,16 @@ import { admitRequest, type Verdict } from './lib/server/loadGuard';
 //    valid is checked by the authenticated layout (pages) and by every /api/v1 route.
 
 /**
- * Path prefixes reachable without a session. The notification actions carry their own signed
- * token instead (lib/server/reminderActionToken.ts, lib/server/cardActionToken.ts).
+ * Path prefixes reachable without a session. The quote service checks its own secret instead
+ * (lib/server/quoteService.ts), and refuses anything that came through the tunnel.
  */
 const PUBLIC_PREFIXES = [
   '/login',
   '/auth',
   '/redefinir-senha',
-  // The privacy policy linked from Google's consent screen.
   '/privacidade',
   '/api/auth',
-  '/api/v1/reminders/actions',
-  '/api/v1/wallet/cards/actions',
+  '/api/internal',
 ];
 
 function isPublic(pathname: string): boolean {
@@ -36,7 +34,7 @@ const BUSY_PAGE = (title: string, message: string, retryAfter: number) => `<!doc
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="${retryAfter}">
-<title>Capital + — volte em instantes</title>
+<title>Invest + — volte em instantes</title>
 <style>
   :root { color-scheme: light dark; --bg: #f4f4f6; --card: #ffffff; --fg: #18181b; --muted: #71717a; }
   @media (prefers-color-scheme: dark) { :root { --bg: #0b0b0d; --card: #18181b; --fg: #f4f4f5; --muted: #a1a1aa; } }
@@ -66,7 +64,7 @@ function busyResponse(request: NextRequest, verdict: Exclude<Verdict, { action: 
   const headers = { 'Retry-After': String(retryAfter), 'Cache-Control': 'no-store' };
   const message = blocked
     ? `Muitos acessos seguidos deste aparelho. Espere ${retryAfter} segundos e tente de novo.`
-    : `O Capital + recebeu acessos demais de uma vez e pausou por alguns instantes para não cair. Tente de novo em ${retryAfter} segundos.`;
+    : `O Invest + recebeu acessos demais de uma vez e pausou por alguns instantes para não cair. Tente de novo em ${retryAfter} segundos.`;
 
   if (request.nextUrl.pathname.startsWith('/api/')) {
     return NextResponse.json(
@@ -74,7 +72,7 @@ function busyResponse(request: NextRequest, verdict: Exclude<Verdict, { action: 
       { status, headers },
     );
   }
-  const title = blocked ? 'Muitos acessos seguidos' : 'O Capital + está descansando um pouquinho';
+  const title = blocked ? 'Muitos acessos seguidos' : 'O Invest + está descansando um pouquinho';
   return new NextResponse(BUSY_PAGE(title, message, retryAfter), {
     status,
     headers: { ...headers, 'Content-Type': 'text/html; charset=utf-8' },

@@ -14,7 +14,7 @@ import {
   type HistoryRange,
   type PriceHistory,
 } from '@/lib/diagram';
-import { formatBRL } from '@/lib/budget';
+import { formatBRL } from '@/lib/core';
 import { diagramRepository } from '@/lib/storage';
 import { toStorageErrorMessage } from '@/lib/storage/errors';
 import { useDiagram } from '@/components/diagram/useDiagram';

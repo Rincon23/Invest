@@ -1,11 +1,9 @@
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { ZodError, type ZodType } from 'zod';
-import { MonthClosedError, MonthNotFoundError } from '@/lib/storage/repository';
 import { userAccess, type UserAccess } from './access';
 import { PostgresBanksRepository } from './banks/repository';
 import { getAuth } from './auth';
-import { PostgresBudgetRepository } from './budgetRepository';
 import { getDb } from './db';
 import { PostgresDiagramRepository } from './diagramRepository';
 import { HttpError } from './httpError';
@@ -14,8 +12,7 @@ import { PostgresNotificationsRepository } from './notificationsRepository';
 import { PostgresPushRepository } from './push';
 import { QuoteUnavailableError } from './quotes';
 import { allowAttempt } from './rateLimit';
-import { PostgresRemindersRepository } from './remindersRepository';
-import { PostgresWalletRepository } from './walletRepository';
+import { PostgresSettingsRepository } from './settingsRepository';
 
 export { HttpError };
 
@@ -32,19 +29,15 @@ const DEFAULT_MAX_BODY_BYTES = 256 * 1024;
 interface RouteArgs<P> {
   request: NextRequest;
   params: P;
-  /** Budget data (months, entries, settings) for the signed-in user. */
-  repo: PostgresBudgetRepository;
-  /** Carteira data (recorrentes, parcelados, reserva, caixa) for the same user. */
-  wallet: PostgresWalletRepository;
+  /** The signed-in user's settings (modules, Início, notices, notification switches). */
+  settings: PostgresSettingsRepository;
   /** The Diagrama (targets per type, assets and scores, aportes). */
   diagram: PostgresDiagramRepository;
   /** The devices that receive this user's notifications. */
   push: PostgresPushRepository;
-  /** Lembretes and daily tasks. */
-  reminders: PostgresRemindersRepository;
   /** The in-app notification history (the bell / Central de notificações). */
   notifications: PostgresNotificationsRepository;
-  /** Open Finance: the person's Pluggy key and banks (VIP; see lib/server/banks/access.ts). */
+  /** Open Finance: the person's Pluggy key and brokers (restricted; see lib/server/banks/access.ts). */
   banks: PostgresBanksRepository;
   userId: string;
   /** The signed-in user's e-mail, for the owner-only routes. */
@@ -85,17 +78,13 @@ export function apiRoute<P = Record<string, never>>(
       }
 
       const db = getDb();
-      const repo = new PostgresBudgetRepository(db, session.user.id);
-      const wallet = new PostgresWalletRepository(db, session.user.id, repo);
       let access: Promise<UserAccess> | undefined;
       const result = await handler({
         request,
         params: await context.params,
-        repo,
-        wallet,
-        diagram: new PostgresDiagramRepository(db, session.user.id, repo),
+        settings: new PostgresSettingsRepository(db, session.user.id),
+        diagram: new PostgresDiagramRepository(db, session.user.id),
         push: new PostgresPushRepository(db, session.user.id),
-        reminders: new PostgresRemindersRepository(db, session.user.id),
         notifications: new PostgresNotificationsRepository(db, session.user.id),
         banks: new PostgresBanksRepository(db, session.user.id),
         userId: session.user.id,
@@ -196,8 +185,6 @@ function jsonError(
 function errorResponse(err: unknown): Response {
   if (err instanceof HttpError) return jsonError(err.status, err.code, err.message, err.details);
   if (err instanceof ZodError) return jsonError(400, 'INVALID_INPUT', 'Dados inválidos.');
-  if (err instanceof MonthClosedError) return jsonError(409, 'MONTH_CLOSED', err.message);
-  if (err instanceof MonthNotFoundError) return jsonError(404, 'MONTH_NOT_FOUND', err.message);
   if (err instanceof QuoteUnavailableError) return jsonError(502, 'QUOTE_UNAVAILABLE', err.message);
   console.error('[api]', err);
   return jsonError(500, 'INTERNAL', 'Erro no servidor. Tente de novo.');

@@ -1,3 +1,4 @@
+import type { OutsideMark } from '../banks/holdings';
 import type { AssetIndicators } from './indicators';
 
 /**
@@ -152,16 +153,14 @@ export interface DiagramBackup {
   questions: DiagramQuestion[];
   answers: Record<string, AssetAnswers>;
   contributions: DiagramContribution[];
+  /** "Fora do Diagrama" (the check against the banks). Absent in older backups. */
+  outside?: OutsideMark[];
 }
 
 /** What "Aportar" / "Aportar tudo" sends: quotas per asset, R$ per fixed-income type. */
 export interface ContributeInput {
   date: string;
-  /** The competence of the expense, when one is launched. */
-  month: string;
   items: { assetId?: string; type: AssetType; quantity: number }[];
-  /** Also launch the total as an expense in the budget's Investimentos category. */
-  launchExpense: boolean;
 }
 
 /** What adding or editing an asset sends (the ticker is normalized on the server). */

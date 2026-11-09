@@ -1,6 +1,6 @@
 /** What the Administração screen shows. Only the server's owner (OWNER_EMAIL) ever gets it. */
 
-import type { ModuleKey } from '../budget/types';
+import type { ModuleKey } from '../core/types';
 
 export interface LoadGuardConfig {
   /** Average requests per second that raise a warning. */
@@ -67,7 +67,7 @@ export interface AdminModule {
 }
 
 /**
- * How one automatic test came out. `warn` is something the Capital itself can't fix — a free
+ * How one automatic test came out. `warn` is something the app itself can't fix — a free
  * outside service (B3, Yahoo, Google) that did not answer, or something worth a look —, `skip` a
  * test with nothing to test on this server (the AI not set up, no bank connected).
  */

@@ -1,7 +1,7 @@
 'use client';
 
 import { CircleHelp, Settings } from 'lucide-react';
-import type { ModuleKey } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import { helpAnchor, moduleDefinition } from '@/lib/modules';
 import { useTour } from './tour/TourProvider';
 

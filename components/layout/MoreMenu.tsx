@@ -13,7 +13,7 @@ export interface MoreMenuItem {
   /** Either a page to open or an action to run. */
   href?: string;
   onClick?: () => void;
-  /** Unread things in it (Lembretes): a red count on the icon. */
+  /** Unread things in it: a red count on the icon. */
   badge?: number;
 }
 

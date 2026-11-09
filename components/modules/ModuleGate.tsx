@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import type { ModuleKey } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import { isModuleHidden } from '@/lib/modules';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useAuth } from '@/components/providers/AuthProvider';

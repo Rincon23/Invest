@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { isNotificationCategoryOn, type NotificationCategory, type PushMessage } from '../notifications/types';
-import { budgetSettings, notifications } from './db/schema';
+import { settings, notifications } from './db/schema';
 import type { Database } from './db/types';
 import { sendPushToUser, type PushSender, type SendOptions } from './push';
 
@@ -63,12 +63,12 @@ export async function sendUserNotifications(
   }
   if (toPush.length === 0) return results;
 
-  const [settings] = await db
-    .select({ notificationPrefs: budgetSettings.notificationPrefs })
-    .from(budgetSettings)
-    .where(eq(budgetSettings.userId, userId));
+  const [prefs] = await db
+    .select({ notificationPrefs: settings.notificationPrefs })
+    .from(settings)
+    .where(eq(settings.userId, userId));
   const messages = toPush
-    .filter((input) => isNotificationCategoryOn(settings?.notificationPrefs, input.category))
+    .filter((input) => isNotificationCategoryOn(prefs?.notificationPrefs, input.category))
     .map((input) => input.message);
   for (const message of bundle(messages)) {
     await sendPushToUser(db, userId, message, pushOptions);

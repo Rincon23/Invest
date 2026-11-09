@@ -4,7 +4,7 @@ import { useId } from 'react';
 import type { TooltipContentProps } from 'recharts';
 import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import { Area, AreaChart, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { formatBRL } from '@/lib/budget';
+import { formatBRL } from '@/lib/core';
 import { assetType, type AssetType, type HistoryMode, type HistoryPoint, type HistoryRange } from '@/lib/diagram';
 
 const AXIS_TICK = { fill: 'var(--color-muted-foreground)', fontSize: 11 };

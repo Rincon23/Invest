@@ -5,7 +5,7 @@ import { AdminScreen } from '@/components/screens/AdminScreen';
 import { getAuth } from '@/lib/server/auth';
 import { isOwnerEmail } from '@/lib/server/owner';
 
-export const metadata: Metadata = { title: 'Administração — Capital +' };
+export const metadata: Metadata = { title: 'Administração — Invest +' };
 
 // Always rendered per request (it reads the session); never prerendered at build time.
 export const dynamic = 'force-dynamic';

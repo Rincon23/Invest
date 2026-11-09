@@ -12,7 +12,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
-import { createId } from '@/lib/budget';
+import { createId } from '@/lib/core';
 
 export type ToastKind = 'success' | 'error' | 'info';
 

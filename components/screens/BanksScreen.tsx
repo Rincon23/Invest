@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-  BanknoteArrowDown,
-  BanknoteArrowUp,
   CirclePlay,
   ExternalLink,
   Landmark,
@@ -15,8 +13,6 @@ import {
   Target,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { useSettings } from '@/components/providers/SettingsProvider';
-import { isModuleOn } from '@/lib/modules';
 import { ModuleGate } from '@/components/modules/ModuleGate';
 import { ModuleHelpButton, ModuleSettingsButton } from '@/components/modules/ModuleHelpButton';
 import { ModuleSettingsSheet } from '@/components/modules/ModuleSettingsSheet';
@@ -33,14 +29,10 @@ import {
   formatAgo,
   MEU_PLUGGY_URL,
   PLUGGY_DASHBOARD_URL,
-  type BankAccount,
-  type BankAccountKind,
   type BankConnection,
 } from '@/lib/banks';
-import type { BankAlertSettings, BankReviewCounts } from '@/lib/banks';
 import { banksRepository, type BanksOverviewResult } from '@/lib/storage';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
-import { Switch } from '@/components/ui/Switch';
 import { toStorageErrorMessage } from '@/lib/storage/errors';
 
 export function BanksScreen() {
@@ -77,7 +69,6 @@ function Card({ children, tour }: { children: ReactNode; tour?: string }) {
 function Banks() {
   const backHref = useHomeHref();
   const confirm = useConfirm();
-  const { settings } = useSettings();
   const { showToast } = useToast();
   const [overview, setOverview] = useState<BanksOverviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,10 +77,6 @@ function Banks() {
   const [renaming, setRenaming] = useState<BankConnection | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  /** How many lines of this month still ask for a tap, on the "Conferir" buttons. */
-  const [counts, setCounts] = useState<BankReviewCounts | null>(null);
-  /** Read the counts again (after "Buscar novidades"). */
-  const [countsKey, setCountsKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -122,23 +109,6 @@ function Banks() {
   }, [arriving, load]);
 
   useModuleIntro('banks', { ready: !!overview });
-
-  const expensesOn = isModuleOn(settings, 'expenses');
-  const hasBanks = (overview?.connections.length ?? 0) > 0;
-  useEffect(() => {
-    if (!expensesOn || !hasBanks) return;
-    let active = true;
-    banksRepository
-      .getReviewCounts()
-      .then((next) => {
-        if (active) setCounts(next);
-      })
-      // Without the counts the buttons still work: they just don't say how many.
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [expensesOn, hasBanks, countsKey]);
 
   async function bringBank() {
     setBusy('connect');
@@ -206,8 +176,6 @@ function Banks() {
 
   const { key, connections, limit } = overview;
   const atLimit = connections.length >= limit;
-  // The stocks and ETFs the banks hold are compared with the Diagrama's quantities, in the Diagrama.
-  const diagramOn = isModuleOn(settings, 'diagram');
 
   return (
     <div className="flex flex-1 flex-col gap-4 pb-10">
@@ -227,7 +195,7 @@ function Banks() {
         </Card>
       ) : connections.length === 0 ? (
         <Card tour="bancos-conexoes">
-          <StepHeader step={4} title="Traga seus bancos para o Capital +" />
+          <StepHeader step={4} title="Traga seus bancos para o Invest +" />
           <p className="text-muted text-sm">Escolha um banco no Meu Pluggy e volte. Um por vez.</p>
           <button type="button" className={primaryButton} disabled={busy !== null} onClick={() => void bringBank()}>
             {busy === 'connect' ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <Landmark className="h-4 w-4" aria-hidden />}
@@ -237,40 +205,21 @@ function Banks() {
       ) : (
         <section className="flex flex-col gap-3" data-tour="bancos-conexoes">
           <Card>
-            {(expensesOn || diagramOn) && (
-              <div className="flex flex-col gap-0.5">
-                <p className="text-foreground font-semibold">Conferir com o Capital +</p>
-                <p className="text-muted text-sm">O que chegou dos bancos, ao lado do que você lançou.</p>
-              </div>
-            )}
-            {expensesOn && (
-              <>
-                <Link href="/bancos/conferir?tipo=gastos" className={primaryButton}>
-                  <BanknoteArrowUp className="h-4 w-4" aria-hidden />
-                  Conferir gastos
-                  {counts && <MissingBadge count={counts.expenses} strong />}
-                </Link>
-                <Link href="/bancos/conferir?tipo=recebimentos" className={secondaryButton}>
-                  <BanknoteArrowDown className="h-4 w-4" aria-hidden />
-                  Conferir recebimentos
-                  {counts && <MissingBadge count={counts.incomes} />}
-                </Link>
-              </>
-            )}
-            {diagramOn && (
-              <Link href="/diagrama?aba=ativos&conferir=1" className={secondaryButton}>
-                <Target className="h-4 w-4" aria-hidden />
-                Conferir investimentos
-              </Link>
-            )}
+            <div className="flex flex-col gap-0.5">
+              <p className="text-foreground font-semibold">Conferir com o Diagrama</p>
+              <p className="text-muted text-sm">O que a corretora tem, ao lado do que está no Diagrama.</p>
+            </div>
+            <Link href="/diagrama?aba=ativos&conferir=1" className={primaryButton}>
+              <Target className="h-4 w-4" aria-hidden />
+              Conferir investimentos
+            </Link>
             <button
               type="button"
-              className={expensesOn || diagramOn ? 'text-primary flex min-h-[44px] items-center justify-center gap-2 text-sm font-medium disabled:opacity-50' : secondaryButton}
+              className="text-primary flex min-h-[44px] items-center justify-center gap-2 text-sm font-medium disabled:opacity-50"
               disabled={busy !== null}
               onClick={() =>
                 void act('sync', async () => {
                   const { changed } = await banksRepository.sync();
-                  if (changed.length > 0) setCountsKey((key) => key + 1);
                   showToast(
                     changed.length > 0
                       ? 'Chegaram dados novos dos bancos.'
@@ -329,7 +278,7 @@ function Banks() {
       <div className="text-muted mx-4 text-sm" data-tour="bancos-uma-vez-por-dia">
         <InfoTip
           label="Por que uma vez por dia?"
-          info="O Meu Pluggy atualiza cada banco uma vez por dia, e o Capital + lê o que chegou. Ninguém consegue pedir antes: nem o Capital +, nem a Pluggy."
+          info="O Meu Pluggy atualiza cada banco uma vez por dia, e o Invest + lê o que chegou. Ninguém consegue pedir antes: nem o Invest +, nem a Pluggy."
         >
           <span>Os bancos mandam os dados uma vez por dia.</span>
         </InfoTip>
@@ -349,7 +298,7 @@ function Banks() {
           onRemove={async () => {
             const ok = await confirm({
               title: 'Tirar este banco',
-              message: `• Banco: ${renaming.name}. Ele sai do Capital + e da sua chave da Pluggy, mas continua conectado no Meu Pluggy.`,
+              message: `• Banco: ${renaming.name}. Ele sai do Invest + e da sua chave da Pluggy, mas continua conectado no Meu Pluggy.`,
               confirmLabel: 'Tirar',
               destructive: true,
             });
@@ -360,7 +309,7 @@ function Banks() {
                 await banksRepository.remove(renaming.itemId);
                 setRenaming(null);
               },
-              `${renaming.name} saiu do Capital +.`,
+              `${renaming.name} saiu do Invest +.`,
             );
           }}
         />
@@ -368,7 +317,6 @@ function Banks() {
 
       {configuring && (
         <ModuleSettingsSheet module="banks" onClose={() => setConfiguring(false)}>
-          {key && connections.length > 0 && <AlertsSettings />}
           {key && connections.length > 0 && <NotificationsSection />}
           <KeySettings
             overview={overview}
@@ -382,8 +330,8 @@ function Banks() {
                 title: 'Desconectar o Open Finance',
                 message:
                   connections.length > 0
-                    ? `A sua chave e ${connections.length === 1 ? 'o banco' : `os ${connections.length} bancos`} saem do Capital +. No Meu Pluggy, eles continuam.`
-                    : 'A sua chave sai do Capital +.',
+                    ? `A sua chave e ${connections.length === 1 ? 'o banco' : `os ${connections.length} bancos`} saem do Invest +. No Meu Pluggy, eles continuam.`
+                    : 'A sua chave sai do Invest +.',
                 confirmLabel: 'Desconectar',
                 destructive: true,
               });
@@ -395,20 +343,6 @@ function Banks() {
         </ModuleSettingsSheet>
       )}
     </div>
-  );
-}
-
-/** How many lines of this month are missing in the Capital ("✓" when none). */
-function MissingBadge({ count, strong = false }: { count: number; strong?: boolean }) {
-  return (
-    <span
-      className={`min-w-[1.5rem] rounded-full px-1.5 text-center text-xs font-semibold tabular-nums ${
-        strong ? 'bg-primary-foreground/20' : 'bg-primary/10 text-primary'
-      }`}
-    >
-      {count > 0 ? count : '✓'}
-      <span className="sr-only">{count === 1 ? ' falta no Capital +' : count > 0 ? ' faltam no Capital +' : ' tudo confere'}</span>
-    </span>
   );
 }
 
@@ -630,13 +564,6 @@ function Setup({
   );
 }
 
-const KIND_LABEL: Record<BankAccountKind, string> = {
-  checking: 'conta',
-  savings: 'poupança',
-  card: 'cartão',
-  other: 'outra',
-};
-
 function ConnectionCard({
   connection,
   now,
@@ -655,7 +582,7 @@ function ConnectionCard({
   const health = connectionHealth(connection, now);
   // The first read failed (Pluggy's side) and nothing arrived: Meu Pluggy can't be asked to read
   // again, so the way out is bringing the bank again.
-  const neverArrived = health === 'error' && connection.accounts.length === 0;
+  const neverArrived = health === 'error' && connection.lastUpdatedAt === null;
   const consentLeft = health === 'reconnect' ? null : consentDaysLeft(connection, now);
   const fine = health === 'ok' || health === 'pending';
   return (
@@ -717,30 +644,16 @@ function ConnectionCard({
         </div>
       )}
 
-      {connection.accounts.length > 0 && (
-        <ul className="divide-border flex flex-col divide-y">
-          {connection.accounts.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              // A bank that is just one card is named after it: no need to say the card's name twice.
-              name={connection.accounts.length === 1 && account.name === connection.name ? null : account.name}
-            />
-          ))}
-        </ul>
+      {health !== 'pending' && (
+        <p className="text-muted text-sm">
+          {connection.investments === 0
+            ? 'Nenhum investimento chegou desta conexão.'
+            : connection.investments === 1
+              ? '1 investimento'
+              : `${connection.investments} investimentos`}
+        </p>
       )}
     </Card>
-  );
-}
-
-/** Just what the account is: no balance, no bill and no due date (the banks only check the Capital). */
-function AccountRow({ account, name }: { account: BankAccount; name: string | null }) {
-  const kind = KIND_LABEL[account.kind];
-  return (
-    <li className="flex items-baseline justify-between gap-3 py-2 text-sm">
-      <span className="text-foreground min-w-0 truncate">{name ?? kind[0].toUpperCase() + kind.slice(1)}</span>
-      {name !== null && <span className="text-muted shrink-0 text-xs">{kind}</span>}
-    </li>
   );
 }
 
@@ -787,82 +700,9 @@ function RenameSheet({
         disabled={busy}
         className="border-danger text-danger mt-4 min-h-[44px] w-full rounded-lg border px-3 text-sm font-medium disabled:opacity-50"
       >
-        Tirar este banco do Capital +
+        Tirar este banco do Invest +
       </button>
     </BottomSheet>
-  );
-}
-
-const ALERT_SWITCHES: { key: keyof BankAlertSettings; label: string; detail?: string }[] = [
-  { key: 'expenses', label: 'Gastos para conferir' },
-  { key: 'incomes', label: 'Recebimentos para conferir' },
-  { key: 'silent', label: 'Aviso silencioso', detail: 'Chega sem som nem vibração.' },
-];
-
-/** What the phone is told when a bank sends data: only when it brought something to check. */
-function AlertsSettings() {
-  const { showToast } = useToast();
-  const [draft, setDraft] = useState<BankAlertSettings | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    banksRepository
-      .getAlerts()
-      .then((next) => {
-        if (active) setDraft(next.settings);
-      })
-      .catch((err: unknown) => {
-        if (active) setError(toStorageErrorMessage(err, 'Não foi possível abrir os avisos.'));
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  async function save(current: BankAlertSettings) {
-    setSaving(true);
-    try {
-      setDraft((await banksRepository.saveAlerts(current)).settings);
-      showToast('Avisos salvos.');
-    } catch (err) {
-      showToast(toStorageErrorMessage(err, 'Não foi possível salvar os avisos.'), 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (error) return <p className="text-danger px-4 text-sm">{error}</p>;
-  if (!draft) return <p className="text-muted px-4 text-sm">Carregando os avisos…</p>;
-
-  return (
-    <form
-      className="flex flex-col gap-3 px-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save(draft);
-      }}
-    >
-      <p className="text-foreground font-semibold">Avisos no celular</p>
-      <p className="text-muted text-sm">Quando um banco atualiza e traz algo para conferir.</p>
-      {ALERT_SWITCHES.map(({ key, label, detail }) => (
-        <div key={key} className="flex items-center justify-between gap-3">
-          <span className="min-w-0">
-            <span className="text-foreground block text-sm font-medium">{label}</span>
-            {detail && <span className="text-muted block text-xs">{detail}</span>}
-          </span>
-          <Switch
-            checked={draft[key]}
-            onChange={(checked) => setDraft({ ...draft, [key]: checked })}
-            label={label}
-          />
-        </div>
-      ))}
-      <button type="submit" className={primaryButton} disabled={saving}>
-        {saving ? 'Salvando…' : 'Salvar avisos'}
-      </button>
-    </form>
   );
 }
 

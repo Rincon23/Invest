@@ -23,7 +23,7 @@ export const GET = apiRoute(async ({ banks, access, userId }): Promise<BanksOver
   };
 });
 
-/** "Desconectar": the key and every bank leave the Capital (and the person's Pluggy application). */
+/** "Desconectar": the key and every bank leave the app (and the person's Pluggy application). */
 export const DELETE = apiRoute(async ({ banks, access, userId }) => {
   requireBanksAccess(await access());
   await disconnectAll(banks, userId);

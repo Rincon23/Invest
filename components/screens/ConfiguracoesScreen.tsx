@@ -19,13 +19,12 @@ import {
   type UpdateNameState,
 } from '@/lib/auth/actions';
 import { MAX_NAME_PART, splitName } from '@/lib/auth/names';
-import { budgetRepository, downloadBackup, readBackupFile } from '@/lib/storage';
-import { hasLocalData, importLocalDataToCloud } from '@/lib/storage/localMigration';
+import { downloadBackup, readBackupFile, settingsRepository } from '@/lib/storage';
 
 /**
  * What belongs to no module: the account, the theme, backups and the local data of this device.
  * Privacidade is an entry of the app drawer, and each module's own settings live behind
- * the gear in its screen (categories in Categorias, reminder times in Lembretes, and so on).
+ * the gear in its screen (the types and targets in the Diagrama, the key in Open Finance).
  */
 export function ConfiguracoesScreen() {
   const { settings } = useSettings();
@@ -36,7 +35,7 @@ export function ConfiguracoesScreen() {
   const homeHref = useHomeHref();
 
   async function handleExport() {
-    const payload = await budgetRepository.exportData();
+    const payload = await settingsRepository.exportData();
     downloadBackup(payload);
   }
 
@@ -47,7 +46,7 @@ export function ConfiguracoesScreen() {
     setImportError(null);
     try {
       const payload = await readBackupFile(file);
-      await budgetRepository.importData(payload);
+      await settingsRepository.importData(payload);
       // Full reload (not router navigation): every screen's IndexedDB-backed state must
       // be re-read from scratch after a wholesale data replacement.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
@@ -69,7 +68,7 @@ export function ConfiguracoesScreen() {
       showToast('Operação cancelada. Nenhuma alteração foi realizada.', 'info');
       return;
     }
-    await budgetRepository.clearAll();
+    await settingsRepository.clearAll();
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = '/';
   }
@@ -125,8 +124,6 @@ export function ConfiguracoesScreen() {
           {importError && <p className="text-danger text-sm">{importError}</p>}
         </div>
       </section>
-
-      <LocalDataSection />
 
       <section className="px-4">
         <button
@@ -195,7 +192,7 @@ function NameForm({ current }: { current: string | null }) {
     <form action={action} className="flex flex-col gap-3">
       {!current && (
         <p className="bg-primary/10 text-foreground rounded-lg px-3 py-2 text-xs leading-relaxed">
-          Como podemos te chamar? O Capital + usa o seu primeiro nome na Início e nos lembretes.
+          Como podemos te chamar? O Invest + usa o seu primeiro nome na Início.
         </p>
       )}
       <div className="grid grid-cols-2 gap-3">
@@ -281,66 +278,5 @@ function DeleteAccountSheet({ onClose }: { onClose: () => void }) {
         </button>
       </form>
     </BottomSheet>
-  );
-}
-
-function LocalDataSection() {
-  const confirm = useConfirm();
-  const [available, setAvailable] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void hasLocalData().then((has) => {
-      if (active) setAvailable(has);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  if (!available) return null;
-
-  async function handleImport() {
-    const confirmed = await confirm({
-      title: 'Importar dados deste dispositivo',
-      message: 'Substitui os dados atuais da sua conta. Não dá para desfazer.',
-      confirmLabel: 'Importar',
-      destructive: true,
-    });
-    if (!confirmed) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await importLocalDataToCloud();
-      // Full reload (not router navigation): every screen's repository-backed state
-      // must be re-read from scratch after a wholesale data replacement.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = '/';
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao importar.');
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="flex flex-col gap-3 px-4">
-      <h2 className="text-muted text-sm font-semibold">Dados locais deste dispositivo</h2>
-      <div className="border-border bg-card flex flex-col gap-2 rounded-xl border p-4 shadow-sm">
-        <p className="text-muted text-sm">
-          Há dados da versão anterior neste aparelho.
-        </p>
-        <button
-          type="button"
-          onClick={() => void handleImport()}
-          disabled={busy}
-          className="border-border text-foreground min-h-[44px] rounded-lg border px-4 text-sm font-medium disabled:opacity-50"
-        >
-          {busy ? 'Importando…' : 'Importar dados deste dispositivo'}
-        </button>
-        {error && <p className="text-danger text-sm">{error}</p>}
-      </div>
-    </section>
   );
 }

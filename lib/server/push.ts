@@ -241,8 +241,8 @@ export class PostgresPushRepository {
       this.db,
       this.userId,
       {
-        title: 'Capital +',
-        body: '🔔 Tudo certo! É assim que seus lembretes vão chegar.',
+        title: 'Invest +',
+        body: '🔔 Tudo certo! É assim que os avisos vão chegar.',
         url: '/configuracoes',
         tag: 'capital-teste',
       },

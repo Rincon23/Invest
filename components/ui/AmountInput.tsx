@@ -1,7 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { amountToInputValue, formatAmountTyping, parseAmountInput } from '@/lib/budget';
+import { amountToInputValue, formatAmountTyping, parseAmountInput } from '@/lib/core';
 
 /** Whatever the field was given ("144,8", "100", "1.234,56"), shown the way it is typed: "144,80". */
 function display(value: string): string {

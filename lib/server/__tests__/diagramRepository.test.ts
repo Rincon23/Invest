@@ -5,10 +5,9 @@ import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { currentMonthKey, todayISO } from '@/lib/budget';
+import { todayISO } from '@/lib/core';
 import { RECOMMENDED_QUESTIONS, type AssetInput } from '@/lib/diagram';
 import { clearAccountData } from '../accountData';
-import { PostgresBudgetRepository } from '../budgetRepository';
 import * as schema from '../db/schema';
 import type { Database } from '../db/types';
 import { PostgresDiagramRepository } from '../diagramRepository';
@@ -34,8 +33,7 @@ afterEach(() => {
 async function newAccount() {
   const id = randomUUID();
   await db.insert(schema.user).values({ id, name: 'Teste', email: `${id}@teste.local` });
-  const budget = new PostgresBudgetRepository(db, id);
-  return { id, budget, diagram: new PostgresDiagramRepository(db, id, budget) };
+  return { id, diagram: new PostgresDiagramRepository(db, id) };
 }
 
 async function setPrice(ticker: string, price: number) {
@@ -109,20 +107,17 @@ describe('PostgresDiagramRepository', () => {
     expect((await diagram.getOverview(false)).answers[wege.id]).toBeUndefined();
   });
 
-  it('adds the quotas of an aporte, keeps it in the history and can launch it in Investimentos', async () => {
-    const { budget, diagram } = await newAccount();
-    await budget.saveSettings({ ...(await budget.getSettings()), modules: { expenses: true } });
+  it('adds the quotas of an aporte and keeps it in the history', async () => {
+    const { diagram } = await newAccount();
     const wege = await diagram.addAsset(asset({ quantity: 10 }), '2026-01-01');
     await setPrice('WEGE3', 50);
 
     const contribution = await diagram.contribute({
       date: todayISO(),
-      month: currentMonthKey(),
       items: [
         { assetId: wege.id, type: 'brStocks', quantity: 3 },
         { type: 'fixedIncome', quantity: 200 },
       ],
-      launchExpense: true,
     });
     expect(contribution.amount).toBe(350);
 
@@ -130,12 +125,23 @@ describe('PostgresDiagramRepository', () => {
     expect(overview.assets[0]).toMatchObject({ quantity: 13, quantityUpdatedOn: todayISO() });
     expect(overview.fixedIncome).toEqual([{ type: 'fixedIncome', amount: 200, updatedOn: todayISO(), score: 1 }]);
     expect(overview.contributions).toHaveLength(1);
+  });
 
-    const month = await budget.getMonth(currentMonthKey());
-    const investimentos = (await budget.getSettings()).topics.find((topic) => topic.preset === 'investimentos')!;
-    expect(month?.expenses).toEqual([
-      expect.objectContaining({ topicId: investimentos.id, amount: 350, source: 'investment' }),
+  it('keeps "Fora do Diagrama" by ticker, in the backup too', async () => {
+    const { diagram } = await newAccount();
+    await diagram.setOutside('aupo11', 20);
+    await diagram.setOutside('ITSA4', null);
+    expect(await diagram.listOutside()).toEqual([
+      { ticker: 'AUPO11', quantity: 20 },
+      { ticker: 'ITSA4', quantity: null },
     ]);
+    await expect(diagram.setOutside('não é ticker', null)).rejects.toMatchObject({ code: 'INVALID_TICKER' });
+
+    const backup = await diagram.exportData();
+    await diagram.removeOutside('ITSA4');
+    expect(await diagram.listOutside()).toEqual([{ ticker: 'AUPO11', quantity: 20 }]);
+    await diagram.importData(backup);
+    expect((await diagram.listOutside()).map((mark) => mark.ticker)).toEqual(['AUPO11', 'ITSA4']);
   });
 
   it('refuses an aporte of an asset without a quote, changing nothing', async () => {
@@ -144,9 +150,7 @@ describe('PostgresDiagramRepository', () => {
     await expect(
       diagram.contribute({
         date: todayISO(),
-        month: currentMonthKey(),
-        items: [{ assetId: nova.id, type: 'brStocks', quantity: 1 }],
-        launchExpense: false,
+          items: [{ assetId: nova.id, type: 'brStocks', quantity: 1 }],
       }),
     ).rejects.toMatchObject({ code: 'NO_QUOTE' });
     expect((await diagram.getOverview(false)).assets[0].quantity).toBe(1);
@@ -245,9 +249,7 @@ describe('perguntas automáticas (VIP)', () => {
     await setPrice('DEBB11', 17.22);
     await diagram.contribute({
       date: todayISO(),
-      month: currentMonthKey(),
       items: [{ assetId: debb.id, type: 'fixedIncome', quantity: 2 }],
-      launchExpense: false,
     });
     const overview = await diagram.getOverview(false);
     expect(overview.assets[0]).toMatchObject({ ticker: 'DEBB11', quantity: 28 });

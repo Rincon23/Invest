@@ -40,7 +40,7 @@ const TIMEOUT_MS = 8_000;
 /** Parallel requests to B3 (one per ticker): polite, and plenty for a personal portfolio. */
 const B3_CONCURRENCY = 4;
 const YAHOO_BATCH = 20;
-const HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; Capital/1.0)', Accept: 'application/json' };
+const HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; Invest/1.0)', Accept: 'application/json' };
 
 /** "aupo11.sa " -> "AUPO11". */
 export function normalizeTicker(ticker: string): string {

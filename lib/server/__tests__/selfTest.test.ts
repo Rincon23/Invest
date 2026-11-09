@@ -65,7 +65,7 @@ describe('the catalog', () => {
 });
 
 describe('on a healthy server', () => {
-  it('passes every test of the Capital itself, and an outside service down is only a warning', async () => {
+  it('passes every test of the app itself, and an outside service down is only a warning', async () => {
     const run = await runSelfTests(db, { trigger: 'manual' });
     const failed = run.results.filter((result) => result.status === 'fail');
     expect(failed.map((result) => `${result.id}: ${result.message}`)).toEqual([]);
@@ -75,7 +75,6 @@ describe('on a healthy server', () => {
       if (!check.external) expect(['ok', 'skip'], check.id).toContain(status[check.id]);
     }
     // The network is off: the quotes warn, never fail.
-    expect(status['cash.quotes']).toBe('warn');
     expect(status['diagram.quotes']).toBe('warn');
     // The scheduler isn't running in a test.
     expect(status['server.scheduler']).toBe('skip');
@@ -90,18 +89,13 @@ describe('on a healthy server', () => {
         .where(like(schema.user.email, '%@autoteste.invalid')),
     ).toEqual([]);
     for (const table of [
-      schema.budgetSettings,
-      schema.months,
-      schema.expenses,
-      schema.incomes,
-      schema.cards,
-      schema.installments,
-      schema.recurringExpenses,
-      schema.reminders,
-      schema.xpEvents,
+      schema.settings,
       schema.notifications,
-      schema.bankTransactions,
+      schema.bankConnections,
+      schema.bankInvestments,
+      schema.diagramAssets,
       schema.diagramContributions,
+      schema.diagramOutside,
     ]) {
       expect(await rows(table)).toBe(0);
     }
@@ -110,19 +104,20 @@ describe('on a healthy server', () => {
 
 describe('when something breaks', () => {
   it("fails the module's test and says what happened", async () => {
-    await db.execute(sql`alter table cards rename to cards_quebrada`);
+    await db.execute(sql`alter table diagram_contributions rename to diagram_contributions_quebrada`);
     try {
-      const run = await runSelfTests(db, { trigger: 'manual', checks: { card: SELF_CHECKS.card } });
+      const contribute = SELF_CHECKS.diagram.filter((check) => check.id === 'diagram.contribute');
+      const run = await runSelfTests(db, { trigger: 'manual', checks: { diagram: contribute } });
       expect(run.results).toEqual([
         expect.objectContaining({
-          id: 'card.bill',
-          area: 'card',
+          id: 'diagram.contribute',
+          area: 'diagram',
           status: 'fail',
           message: expect.stringContaining('Erro inesperado'),
         }),
       ]);
     } finally {
-      await db.execute(sql`alter table cards_quebrada rename to cards`);
+      await db.execute(sql`alter table diagram_contributions_quebrada rename to diagram_contributions`);
     }
   }, 60_000);
 
@@ -164,7 +159,7 @@ describe('when something breaks', () => {
   }, 60_000);
 
   it('sums up many failures by module', () => {
-    const result = (area: 'card' | 'server' | 'reminders') => ({
+    const result = (area: 'diagram' | 'server' | 'banks') => ({
       id: `${area}.x`,
       area,
       name: 'x',
@@ -172,8 +167,8 @@ describe('when something breaks', () => {
       message: 'x',
       durationMs: 1,
     });
-    expect(failureNotice([result('card'), result('server'), result('reminders'), result('card')])).toBe(
-      '4 testes falharam: Cartão, Servidor e Lembretes. Veja em Administração.',
+    expect(failureNotice([result('diagram'), result('server'), result('banks'), result('diagram')])).toBe(
+      '4 testes falharam: Diagrama, Servidor e Open Finance. Veja em Administração.',
     );
   });
 });

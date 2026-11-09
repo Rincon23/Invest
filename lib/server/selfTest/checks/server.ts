@@ -2,17 +2,14 @@ import { readFile, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import { count, sql } from 'drizzle-orm';
 import { pgSchema, serial } from 'drizzle-orm/pg-core';
-import { createId } from '../../../budget/id';
-import { factOfDay } from '../../../motivation';
+import { createId } from '../../../core/id';
 import { bankKeys } from '../../db/schema';
-import { createFact, deleteFact, listFacts, updateFact } from '../../factsRepository';
 import { lastRun } from '../../jobRuns';
 import { checkMailer } from '../../mailer';
-import { MOTIVATION_JOB } from '../../motivation';
 import { sendUserNotification } from '../../notify';
 import { PostgresNotificationsRepository } from '../../notificationsRepository';
 import { checkVapidKeys } from '../../push';
-import { schedulerRunning } from '../../scheduler';
+import { SCHEDULER_HEARTBEAT, schedulerRunning } from '../../scheduler';
 import { canEncryptSecrets, decryptSecret, encryptSecret } from '../../secretBox';
 import { expect, expectEqual, type SelfCheck } from '../check';
 
@@ -29,7 +26,6 @@ const SCHEDULER_LATE_MS = 5 * 60 * 1000;
 /** Right after a start the loop hasn't had its first minute yet. */
 const SCHEDULER_WARMUP_SECONDS = 3 * 60;
 /** The fact of the week goes out every Monday; a day of margin for a server that was off. */
-const MOTIVATION_LATE_MS = 8 * 24 * 60 * 60 * 1000;
 const MAIL_TIMEOUT_MS = 10_000;
 const DISK_WARN = 0.1;
 const DISK_FAIL = 0.03;
@@ -85,42 +81,12 @@ export const serverChecks: SelfCheck[] = [
       if (process.uptime() < SCHEDULER_WARMUP_SECONDS) {
         return { status: 'skip', message: 'O servidor acabou de ligar; confere na próxima rodada.' };
       }
-      const last = await lastRun(db, 'reminders');
+      const last = await lastRun(db, SCHEDULER_HEARTBEAT);
       expect(
         last && now.getTime() - last.getTime() < SCHEDULER_LATE_MS,
         last
-          ? `Lembretes, faturas e contas do mês não são avisados desde ${last.toLocaleString('pt-BR')}.`
+          ? `As tarefas em segundo plano não rodam desde ${last.toLocaleString('pt-BR')}.`
           : 'As tarefas em segundo plano nunca rodaram.',
-      );
-    },
-  },
-  {
-    id: 'server.facts',
-    name: 'Frases do "Você sabia?"',
-    run: ({ scratch }) =>
-      scratch(async ({ db, today }) => {
-        const facts = await listFacts(db);
-        expect(facts.length > 0, 'Não há nenhuma frase para mostrar.');
-        expect(factOfDay(facts, today), 'Nenhuma frase para hoje.');
-        const input = { text: 'Autoteste', detail: 'Frase de teste.', sourceLabel: 'Teste', sourceUrl: null };
-        const created = await createFact(db, input);
-        await updateFact(db, created.id, { ...input, text: 'Autoteste editado' });
-        expectEqual((await listFacts(db)).at(-1)?.text, 'Autoteste editado', 'Última frase');
-        await deleteFact(db, created.id);
-        expectEqual((await listFacts(db)).length, facts.length, 'Frases depois de excluir');
-      }),
-  },
-  {
-    id: 'server.motivation',
-    name: 'Frase da semana saindo',
-    async run({ db, now }) {
-      const last = await lastRun(db, MOTIVATION_JOB);
-      if (!schedulerRunning() || !last) {
-        return { status: 'skip', message: 'A próxima frase sai na segunda-feira.' };
-      }
-      expect(
-        now.getTime() - last.getTime() < MOTIVATION_LATE_MS,
-        `A frase da semana não sai desde ${last.toLocaleString('pt-BR')}.`,
       );
     },
   },
@@ -152,36 +118,21 @@ export const serverChecks: SelfCheck[] = [
     id: 'server.backup',
     name: 'Backup exporta e importa sem perder nada',
     run: ({ scratch }) =>
-      scratch(async ({ budget, diagram, month, today }) => {
-        await budget.saveIncome(month, { id: createId(), source: 'Salário', amount: 2500, date: today });
-        await budget.saveExpense(month, {
-          id: createId(),
-          categoryKind: 'fixedCost',
-          description: 'Aluguel',
-          amount: 900,
-          date: today,
-        });
+      scratch(async ({ settings, diagram, today }) => {
         await diagram.setFixedIncome('fixedIncome', 4000, today);
-        const backup = await budget.exportData();
+        await diagram.setOutside('AUPO11', 20);
+        await settings.saveSettings({ dismissedNotices: ['autoteste'] });
+        const saved = await settings.getSettings();
         const diagramBackup = await diagram.exportData();
 
-        await budget.clearAll();
+        await settings.clear();
         await diagram.clear();
-        expectEqual(await budget.listMonths(), [], 'Meses depois de apagar tudo');
+        expectEqual((await diagram.exportData()).fixedIncome, [], 'Renda fixa depois de apagar tudo');
 
-        await budget.importData(backup);
+        await settings.restore(saved);
         await diagram.importData(diagramBackup);
-        const restored = await budget.getMonth(month);
-        expectEqual(
-          restored?.incomes.map((item) => item.amount),
-          [2500],
-          'Rendas depois de importar',
-        );
-        expectEqual(
-          restored?.expenses.map((item) => item.amount),
-          [900],
-          'Gastos depois de importar',
-        );
+        expectEqual((await settings.getSettings()).dismissedNotices, ['autoteste'], 'Avisos vistos depois de importar');
+        expectEqual(await diagram.listOutside(), [{ ticker: 'AUPO11', quantity: 20 }], 'Fora do Diagrama depois de importar');
         expectEqual(
           (await diagram.exportData()).fixedIncome.map((item) => item.amount),
           [4000],

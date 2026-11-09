@@ -1,11 +1,11 @@
-// Capital reads and writes budget data through its own API (/api/*, same origin). This
+// Invest + reads and writes its data through its own API (/api/*, same origin). This
 // service worker caches only the build's static files (JS/CSS/fonts, content-hashed) and lets
 // pages and every /api/* request go straight to the network, so no stale data is ever served.
 // Pages are never cached: they carry the signed-in account (its e-mail), which must not stay on
 // a shared device after signing out. With no connection, the offline page is shown.
 //
-// It also shows the push notifications (reminders, bills, banks) and runs their buttons.
-const CACHE_VERSION = 'capital-v9';
+// It also shows the push notifications and runs their buttons.
+const CACHE_VERSION = 'invest-v1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = '/offline.html';
@@ -125,7 +125,7 @@ async function showNotification(data) {
 
 async function showOne(message) {
   const actions = Array.isArray(message.actions) ? message.actions : [];
-  await self.registration.showNotification(message.title || 'Capital +', {
+  await self.registration.showNotification(message.title || 'Invest +', {
     body: message.body || '',
     icon: '/icon-192.png',
     badge: '/badge-96.png',

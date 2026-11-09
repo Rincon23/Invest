@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut as signOutAction } from '@/lib/auth/actions';
-import type { ModuleKey } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import type { ModuleAccess } from '@/lib/modules';
 import { UNAUTHENTICATED_EVENT } from '@/lib/storage/httpRepository';
 

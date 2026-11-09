@@ -1,18 +1,12 @@
 'use client';
 
 import type { ComponentType, ReactNode } from 'react';
-import type { HomeWidgetKey } from '@/lib/budget';
+import type { HomeWidgetKey } from '@/lib/core';
 import { widgetModule } from '@/lib/modules';
-import { TodayRemindersCard } from '@/components/month/TodayRemindersCard';
-import { RemindersProvider } from '@/components/reminders/RemindersProvider';
-import { WalletProvider } from '@/components/wallet/WalletProvider';
 import { BanksHomeCard } from './BanksHomeCard';
-import { CalendarHomeCard } from './CalendarHomeCard';
 import { DiagramHomeCard } from './DiagramHomeCard';
 import { HistoryHomeCard } from './HistoryHomeCard';
 import { HomeCardBoundary } from './HomeCard';
-import { BudgetHomeCard, ExpensesHomeCard, ReimbursableHomeTile } from './MonthCards';
-import { CardHomeCard, CashHomeCard, RecurringHomeTile } from './WalletCards';
 
 interface CardSpec {
   /** A tile takes half the width and sits next to the tiles around it. */
@@ -20,36 +14,20 @@ interface CardSpec {
   Component: ComponentType;
 }
 
-/** The widget of each module that has one (see `homeCard` in the catalog), plus the extra ones. */
+/** The widget of each module that has one (see `homeCard` in the catalog). */
 const CARDS: Partial<Record<HomeWidgetKey, CardSpec>> = {
-  expenses: { size: 'full', Component: ExpensesHomeCard },
-  budget: { size: 'full', Component: BudgetHomeCard },
-  card: { size: 'full', Component: CardHomeCard },
-  reimbursable: { size: 'half', Component: ReimbursableHomeTile },
-  history: { size: 'full', Component: HistoryHomeCard },
-  recurring: { size: 'half', Component: RecurringHomeTile },
-  cash: { size: 'full', Component: CashHomeCard },
   diagram: { size: 'full', Component: DiagramHomeCard },
-  reminders: { size: 'full', Component: TodayRemindersCard },
-  calendar: { size: 'full', Component: CalendarHomeCard },
+  history: { size: 'full', Component: HistoryHomeCard },
   banks: { size: 'full', Component: BanksHomeCard },
 };
 
-/** The cards that read the wallet: they share one snapshot of it. */
-const WALLET: HomeWidgetKey[] = ['card', 'recurring', 'cash'];
-/** The cards that read the reminders: they share one snapshot of them too. */
-const REMINDERS: HomeWidgetKey[] = ['reminders', 'calendar'];
-
-/** One read of the wallet and one of the reminders, shared by every card (of every área) that needs them. */
-export function HomeCardsData({ keys, children }: { keys: HomeWidgetKey[]; children: ReactNode }) {
-  let content = children;
-  if (keys.some((key) => REMINDERS.includes(key))) content = <RemindersProvider>{content}</RemindersProvider>;
-  if (keys.some((key) => WALLET.includes(key))) content = <WalletProvider>{content}</WalletProvider>;
-  return content;
+/** Data several cards share would be read once here, above all the áreas. None yet. */
+export function HomeCardsData({ children }: { keys: HomeWidgetKey[]; children: ReactNode }) {
+  return children;
 }
 
 /** The Início cards a person can stretch to full width in edit mode — the tiles only: a
- * full card (Lançamentos, Histórico, ...) has its own layout that only makes sense at full width. */
+ * full card has its own layout that only makes sense at full width. */
 export const RESIZABLE_HOME_CARDS: HomeWidgetKey[] = (Object.keys(CARDS) as HomeWidgetKey[]).filter(
   (key) => CARDS[key]?.size === 'half',
 );
@@ -66,8 +44,7 @@ export function effectiveSize(
 
 /**
  * The widgets of one área de trabalho, in the given order. Consecutive tiles share a row two by
- * two (an odd one out takes the whole row). Each card loads its own data and fails on its own;
- * what they share (the wallet, the reminders) comes from one `HomeCardsData` above all the áreas.
+ * two (an odd one out takes the whole row). Each card loads its own data and fails on its own.
  */
 export function HomeCards({
   keys,

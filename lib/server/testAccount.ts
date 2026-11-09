@@ -62,7 +62,7 @@ export async function ensureConfiguredAccount(
 export function ensureTestAccount(email: string, password: string): Promise<void> {
   return ensureConfiguredAccount(email, password, {
     expected: process.env.TEST_ACCOUNT_PASSWORD,
-    name: 'Teste Capital',
+    name: 'Teste Invest',
   });
 }
 

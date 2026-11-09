@@ -51,7 +51,7 @@ function Diagrama({ initialTab, checkBanks }: { initialTab?: DiagramTab; checkBa
   const [adding, setAdding] = useState(false);
   /** "Adicionar" from what the banks hold: the sheet starts filled in. */
   const [fromBank, setFromBank] = useState<BankOnlyHolding | null>(null);
-  const holdings = useBankHoldings();
+  const { holdings, replaceOutside } = useBankHoldings();
   const [openAsset, setOpenAsset] = useState<string | null>(null);
   const [questionsFor, setQuestionsFor] = useState<QuestionType | 'any' | null>(null);
   useModuleIntro('diagram', { ready: !!overview });
@@ -108,7 +108,6 @@ function Diagrama({ initialTab, checkBanks }: { initialTab?: DiagramTab; checkBa
       {tab === 'aporte' ? (
         <AporteTab
           overview={overview}
-          settings={settings}
           onChanged={refresh}
           onOpenTargets={() => setConfiguring(true)}
         />
@@ -116,6 +115,7 @@ function Diagrama({ initialTab, checkBanks }: { initialTab?: DiagramTab; checkBa
         <AssetsTab
           overview={overview}
           holdings={holdings}
+          onOutsideChanged={replaceOutside}
           checkBanks={checkBanks}
           onOpenAsset={(item: DiagramAsset) => setOpenAsset(item.id)}
           onAddAsset={() => {

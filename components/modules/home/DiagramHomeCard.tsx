@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Plus } from 'lucide-react';
-import { formatBRL } from '@/lib/budget';
+import { formatBRL } from '@/lib/core';
 import { assetType, portfolioByType, type DiagramOverview } from '@/lib/diagram';
 import { diagramRepository } from '@/lib/storage';
 import { toStorageErrorMessage } from '@/lib/storage/errors';

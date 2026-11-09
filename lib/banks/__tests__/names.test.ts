@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { accountDisplayName, bankFromTransferNumber, formatAgo, suggestBankName } from '..';
 
-describe('the name the Capital suggests for a bank', () => {
+describe('the name the app suggests for a bank', () => {
   it('comes from the bank code of an account', () => {
     expect(bankFromTransferNumber('208/0001/1234567-8')).toBe('BTG Pactual');
     expect(bankFromTransferNumber('260/0001/9-1')).toBe('Nubank');

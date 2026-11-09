@@ -1,6 +1,6 @@
 import 'server-only';
 import { eq } from 'drizzle-orm';
-import type { ModuleKey } from '../budget/types';
+import type { ModuleKey } from '../core/types';
 import { mayUseModule, vipModulesFrom, type ModuleAccess } from '../modules';
 import { moduleAccess, vipUsers } from './db/schema';
 import type { Database } from './db/types';

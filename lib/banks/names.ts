@@ -2,7 +2,7 @@ import type { BankAccountKind } from './types';
 
 /**
  * Pluggy never says which bank a Meu Pluggy connection is (the connector is always "MeuPluggy"),
- * so the Capital suggests a name from the accounts and the person can change it.
+ * so the app suggests a name from the accounts and the person can change it.
  */
 
 /** Bank codes (COMPE) of the banks people use most; the code starts an account's transfer number. */
@@ -105,7 +105,7 @@ export function tidyName(name: string): string {
 const LEGAL_NAME = /\bS\.?\s?A\.?(\s|$|-)|\bLtda\b|Institui[cç][aã]o de Pagamento/i;
 
 /**
- * How an account shows up in the Capital: its own name; "Conta Nubank" when the bank sent its legal
+ * How an account shows up in the app: its own name; "Conta Nubank" when the bank sent its legal
  * name instead; and "Cartão …" for a card that doesn't say so.
  */
 export function accountDisplayName(account: PluggyAccountName): string {
@@ -122,7 +122,7 @@ export function accountDisplayName(account: PluggyAccountName): string {
 }
 
 /**
- * The name the Capital suggests for a connection: the bank of an account's transfer number, else
+ * The name the app suggests for a connection: the bank of an account's transfer number, else
  * the first account's own name (without the legal tail, "Nu Pagamentos S.A. - Instituição…"),
  * else the first card's.
  */

@@ -1,11 +1,11 @@
-import type { BudgetSettings, ModuleKey, Month, NavKey } from '../budget/types';
+import type { AppSettings, ModuleKey, NavKey } from '../core/types';
 import { MODULES, MODULE_GROUPS, moduleDefinition, type ModuleGroup } from './catalog';
 import { resolveModules } from './flags';
 
 export interface NavEntry {
   key: NavKey;
   label: string;
-  href: (month: Month) => string;
+  href: () => string;
   isActive: (pathname: string) => boolean;
 }
 
@@ -13,11 +13,11 @@ export interface NavEntry {
 export const HOME_NAV: NavEntry = {
   key: 'inicio',
   label: 'Início',
-  href: (month) => `/mes/${month}`,
-  isActive: (pathname) => /^\/mes\/[^/]+\/?$/.test(pathname),
+  href: () => '/',
+  isActive: (pathname) => pathname === '/',
 };
 
-type NavSource = Pick<BudgetSettings, 'modules'> | null | undefined;
+type NavSource = Pick<AppSettings, 'modules'> | null | undefined;
 
 export function navEntry(key: NavKey): NavEntry {
   if (key === 'inicio') return HOME_NAV;
@@ -45,10 +45,10 @@ export function moreItems(source: NavSource): MoreGroup[] {
   })).filter((group) => group.keys.length > 0);
 }
 
-/** The query that opens the Início with the app drawer already up (what an old /mais link becomes). */
+/** The query that opens the Início with the app drawer already up. */
 export const OPEN_APPS_PARAM = 'apps';
 
-/** Where "/" goes, and where every screen's back arrow leads: the Início of that month. */
-export function homeHref(month: Month): string {
-  return HOME_NAV.href(month);
+/** Where every screen's back arrow leads: the Início. */
+export function homeHref(): string {
+  return HOME_NAV.href();
 }

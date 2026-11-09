@@ -1,6 +1,6 @@
 import { isB3Ticker } from '../diagram/assetTypes';
 import type { AssetType, DiagramAsset } from '../diagram/types';
-import { zonedMoment, formatDayMonth } from '../reminders/time';
+import { zonedMoment, formatDayMonth } from '../core/time';
 import { formatAgo } from './format';
 import { connectionHealth } from './health';
 import type { BankConnectionStatus } from './types';
@@ -15,9 +15,9 @@ import type { BankConnectionStatus } from './types';
  * An asset held abroad or in crypto (VOO, BTC) never shows up in Open Finance, so it is never
  * called missing.
  *
- * The Reserva investida also holds a B3 ticker (AUPO11…), usually at the same broker, so its
- * quotas are counted with the Diagrama's: for that ticker "aqui" is Diagrama + Reserva. A
- * correction only ever touches the Diagrama (bank − Reserva); the Reserva has its own movements.
+ * "Fora do Diagrama": what the person said the bank holds and is not the Diagrama's (the Reserva of
+ * the Capital +, a position kept apart), by ticker — all of it, or a number of shares. For that
+ * ticker "aqui" is Diagrama + fora, and a correction only ever touches the Diagrama (bank − fora).
  */
 
 /** One investment as the last read brought it, with the name of its bank. */
@@ -34,8 +34,6 @@ export interface BankHolding {
   isin: string | null;
   /** Null when the bank didn't say. */
   quantity: number | null;
-  /** The person marked it as part of the Reserva ("Atualizar pelos bancos conectados"). */
-  feedsReserve: boolean;
 }
 
 /** A bank that sent investments, and when its data is from. */
@@ -46,12 +44,17 @@ export interface HoldingsBank {
   lastUpdatedAt: string | null;
 }
 
+/** What the person marked "Fora do Diagrama" for a ticker: all the bank has (null) or some shares. */
+export interface OutsideMark {
+  ticker: string;
+  quantity: number | null;
+}
+
 /** What the Diagrama asks the server for (GET /api/v1/banks/holdings). */
 export interface BankHoldings {
   banks: HoldingsBank[];
   holdings: BankHolding[];
-  /** The Reserva investida, when that module is on and holds quotas. */
-  reserve: { ticker: string; quotas: number } | null;
+  outside: OutsideMark[];
 }
 
 /** Below this difference (a ten-thousandth of a share) two quantities are the same. */
@@ -115,9 +118,9 @@ export function suggestedAssetType(subtype: string | null, ticker = ''): AssetTy
 /** One Diagrama asset against the banks. */
 export interface AssetCheck {
   /**
-   * - `match`: the banks hold what the Capital has;
+   * - `match`: the banks hold what the app has;
    * - `different`: both have it, in different quantities;
-   * - `onlyCapital`: the Capital has it and no connected bank sent it.
+   * - `onlyCapital`: the app has it and no connected bank sent it.
    */
   status: 'match' | 'different' | 'onlyCapital';
   ticker: string;
@@ -125,16 +128,21 @@ export interface AssetCheck {
   bank: number;
   /** The banks that sent it; for `onlyCapital`, every bank that sent investments. */
   banks: string[];
-  /** The Diagrama (every asset of this ticker) plus the Reserva investida's quotas of it. */
+  /** The Diagrama (every asset of this ticker) plus what is marked "Fora do Diagrama". */
   capital: number;
-  /** The Reserva investida's part of `capital` (0 unless it is the Reserva's ticker). */
-  reserve: number;
+  /** The "Fora do Diagrama" part of `capital` (0 unless the person marked some). */
+  outside: number;
   /**
-   * What "Usar" saves as this asset's quantity so the Capital matches the banks (bank − Reserva).
+   * What "Usar" saves as this asset's quantity so the app matches the banks (bank − fora).
    * Null when no single change in the Diagrama does it: the ticker is in two of its types, or
-   * the asset already has that quantity (the Reserva alone holds more than the banks).
+   * the asset already has that quantity.
    */
   use: number | null;
+  /**
+   * "A diferença fica fora do Diagrama": the whole quantity to mark outside so the bank's extra
+   * shares stop being called a difference (bank − Diagrama). Null when the bank holds less.
+   */
+  keepOutside: number | null;
   /**
    * When it doesn't match: other classes of the same company the banks hold and the Diagrama
    * doesn't ("KLBN4: 157" next to a KLBN3 the bank has none of), a likely typo before "Usar 0".
@@ -145,10 +153,10 @@ export interface AssetCheck {
 /** In a bank and not in the Diagrama ("Adicionar"). */
 export interface BankOnlyHolding {
   ticker: string;
-  /** What the banks hold beyond the Reserva investida: the quantity "Adicionar" fills in. */
+  /** What the banks hold beyond what is "Fora do Diagrama": the quantity "Adicionar" fills in. */
   quantity: number;
   bank: number;
-  reserve: number;
+  outside: number;
   banks: string[];
   /** The bank's name for it ("PETROBRAS PN"). */
   name: string;
@@ -162,11 +170,8 @@ export interface HoldingsCheck {
   /** By Diagrama asset id; an asset the banks can't speak about (VOO, BTC) has none. */
   assets: Record<string, AssetCheck>;
   onlyBank: BankOnlyHolding[];
-  /**
-   * The Reserva investida holds more of its ticker than the banks, and the Diagrama has none of
-   * it: nothing to fix here, but worth a look in the Reserva.
-   */
-  reserveAbove: { ticker: string; reserve: number; bank: number; banks: string[] } | null;
+  /** What is marked "Fora do Diagrama" and the banks hold, with how much of it counts. */
+  outside: { ticker: string; quantity: number; all: boolean; banks: string[] }[];
   /** The banks that sent stocks or funds (none: there is nothing to compare). */
   banks: string[];
 }
@@ -179,8 +184,6 @@ interface Position {
   /** Some investment of this ticker came without a quantity: it can't be compared. */
   unknown: boolean;
   banks: string[];
-  /** Every investment of it is marked as part of the Reserva. */
-  allReserve: boolean;
   name: string;
   subtype: string | null;
 }
@@ -190,7 +193,7 @@ interface Position {
  * quantity, without asking the banks again.
  */
 export function checkHoldings(
-  data: Pick<BankHoldings, 'holdings' | 'reserve'>,
+  data: Pick<BankHoldings, 'holdings' | 'outside'>,
   assets: Pick<DiagramAsset, 'id' | 'ticker' | 'quantity'>[],
 ): HoldingsCheck {
   const positions = new Map<string, Position>();
@@ -201,14 +204,12 @@ export function checkHoldings(
       quantity: 0,
       unknown: false,
       banks: [],
-      allReserve: true,
       name: holding.name,
       subtype: holding.subtype,
     };
     if (holding.quantity === null) position.unknown = true;
     else position.quantity = round8(position.quantity + holding.quantity);
     if (!position.banks.includes(holding.bankName)) position.banks.push(holding.bankName);
-    position.allReserve &&= holding.feedsReserve;
     positions.set(ticker, position);
   }
   // Only a bank that told some quantity can be compared with (one read before the quantities
@@ -220,7 +221,7 @@ export function checkHoldings(
         .map((holding) => holding.bankName),
     ),
   ];
-  const result: HoldingsCheck = { assets: {}, onlyBank: [], reserveAbove: null, banks };
+  const result: HoldingsCheck = { assets: {}, onlyBank: [], outside: [], banks };
   if (banks.length === 0) return result;
 
   const byTicker = new Map<string, Pick<DiagramAsset, 'id' | 'ticker' | 'quantity'>[]>();
@@ -228,27 +229,32 @@ export function checkHoldings(
     if (!isB3Ticker(asset.ticker)) continue;
     byTicker.set(asset.ticker, [...(byTicker.get(asset.ticker) ?? []), asset]);
   }
-  const reserveQuotas = Math.max(0, data.reserve?.quotas ?? 0);
-  const reserveTicker = reserveQuotas > 0 ? holdingTicker(data.reserve?.ticker) : null;
+  const marks = new Map<string, number | null>();
+  for (const mark of data.outside) {
+    const ticker = holdingTicker(mark.ticker);
+    if (ticker) marks.set(ticker, mark.quantity);
+  }
 
-  const tickers = new Set([
-    ...byTicker.keys(),
-    ...positions.keys(),
-    ...(reserveTicker ? [reserveTicker] : []),
-  ]);
+  const tickers = new Set([...byTicker.keys(), ...positions.keys()]);
   for (const ticker of [...tickers].sort()) {
     const position = positions.get(ticker);
     if (position?.unknown) continue;
     const bank = position?.quantity ?? 0;
-    const reserve = ticker === reserveTicker ? reserveQuotas : 0;
+    // Never more than the bank holds: a mark left from an older position counts only up to it.
+    const mark = marks.get(ticker);
+    const outside = mark === undefined ? 0 : round8(Math.min(bank, mark ?? bank));
+    if (outside > QUANTITY_TOLERANCE && position) {
+      result.outside.push({ ticker, quantity: outside, all: mark === null, banks: position.banks });
+    }
     const held = byTicker.get(ticker) ?? [];
 
     if (held.length > 0) {
-      const capital = round8(held.reduce((sum, asset) => sum + asset.quantity, 0) + reserve);
+      const diagram = round8(held.reduce((sum, asset) => sum + asset.quantity, 0));
+      const capital = round8(diagram + outside);
       const inBank = bank > QUANTITY_TOLERANCE;
       if (!inBank && capital <= QUANTITY_TOLERANCE) continue;
       const status = same(bank, capital) ? 'match' : inBank ? 'different' : 'onlyCapital';
-      const target = round8(Math.max(0, bank - reserve));
+      const target = round8(Math.max(0, bank - outside));
       const related =
         status === 'match'
           ? []
@@ -271,31 +277,29 @@ export function checkHoldings(
           bank,
           banks: position?.banks ?? banks,
           capital,
-          reserve,
+          outside,
           use: status !== 'match' && held.length === 1 && !same(asset.quantity, target) ? target : null,
+          keepOutside: status === 'different' && bank - capital > QUANTITY_TOLERANCE ? round8(bank - diagram) : null,
           related,
         };
       }
       continue;
     }
 
-    if (position && bank - reserve > QUANTITY_TOLERANCE) {
-      // Marked as the Reserva in the bank's list: the person already said where it belongs.
-      if (position.allReserve || isTemporaryRight(ticker)) continue;
+    if (position && bank - outside > QUANTITY_TOLERANCE) {
+      if (isTemporaryRight(ticker)) continue;
       const subtype = position.subtype?.toUpperCase() ?? null;
       result.onlyBank.push({
         ticker,
-        quantity: round8(bank - reserve),
+        quantity: round8(bank - outside),
         bank,
-        reserve,
+        outside,
         banks: position.banks,
         name: position.name,
         subtype,
         type: suggestedAssetType(subtype, ticker),
         isEtf: subtype === 'ETF',
       });
-    } else if (reserve - bank > QUANTITY_TOLERANCE) {
-      result.reserveAbove = { ticker, reserve, bank, banks: position?.banks ?? banks };
     }
   }
   return result;

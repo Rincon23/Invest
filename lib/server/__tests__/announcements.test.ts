@@ -83,7 +83,7 @@ describe('novidades do app', () => {
     const { id, feed } = await oldAccount();
     await runAnnouncementsJob(db, [NOVIDADE], round(6));
     await sendUserNotification(db, id, {
-      category: 'reminder',
+      category: 'banks',
       message: { title: 'Pagar o aluguel', body: 'Hoje às 9h', url: '/lembretes' },
     });
     expect((await feed.list()).notifications).toHaveLength(2);
@@ -114,7 +114,7 @@ describe('novidades do app', () => {
   it('apaga de verdade um aviso que nada recria (um lembrete)', async () => {
     const { id, feed } = await oldAccount();
     await sendUserNotification(db, id, {
-      category: 'reminder',
+      category: 'banks',
       message: { title: 'Pagar o aluguel', body: 'Hoje às 9h', url: '/lembretes' },
     });
 

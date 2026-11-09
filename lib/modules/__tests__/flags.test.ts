@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultSettings } from '../../budget/seed';
-import type { ModuleKey } from '../../budget/types';
+import { createDefaultSettings } from '../../core/settings';
+import type { ModuleKey } from '../../core/types';
 import { MODULES, MODULE_KEYS, moduleNames } from '../catalog';
 import {
   ALL_MODULES,
@@ -22,37 +22,22 @@ const off = (...keys: ModuleKey[]) => Object.fromEntries(keys.map((key) => [key,
 const notVipDefault = { vip: false, vipModules: DEFAULT_VIP_MODULES };
 
 describe('catálogo de módulos', () => {
-  it('tem os 11 módulos, Missões primeiro e cada um depois dos que ele precisa', () => {
-    expect(MODULE_KEYS).toEqual([
-      'missions',
-      'expenses',
-      'budget',
-      'card',
-      'reimbursable',
-      'history',
-      'recurring',
-      'cash',
-      'banks',
-      'diagram',
-      'reminders',
-    ]);
+  it('tem os 3 módulos, cada um depois dos que ele precisa', () => {
+    expect(MODULE_KEYS).toEqual(['diagram', 'history', 'banks']);
     MODULES.forEach((definition, index) => {
       for (const dep of definition.dependsOn) expect(MODULE_KEYS.indexOf(dep)).toBeLessThan(index);
     });
   });
 
   it('junta nomes de módulos em português', () => {
-    expect(moduleNames(['expenses'])).toBe('Lançamentos');
-    expect(moduleNames(['expenses', 'card'])).toBe('Lançamentos e Cartão');
-    expect(moduleNames(['expenses', 'card', 'reimbursable'])).toBe(
-      'Lançamentos, Cartão e A receber',
-    );
+    expect(moduleNames(['diagram'])).toBe('Diagrama');
+    expect(moduleNames(['diagram', 'history'])).toBe('Diagrama e Histórico');
+    expect(moduleNames(['diagram', 'history', 'banks'])).toBe('Diagrama, Histórico e Open Finance');
   });
 
-  it('nunca chama nada de "Ressarcido" nem de "balde"', () => {
+  it('não tem nada do Capital +: missões, gastos, cartão, reserva', () => {
     const text = JSON.stringify(MODULES).toLowerCase();
-    expect(text).not.toContain('ressarcido');
-    expect(text).not.toContain('balde');
+    for (const word of ['missões', 'lançamentos', 'cartão', 'reserva', 'lembretes']) expect(text).not.toContain(word);
   });
 });
 
@@ -60,103 +45,79 @@ describe('módulos ligados', () => {
   it('liga tudo para uma conta nova: ninguém escolhe módulos', () => {
     expect(resolveModules(undefined)).toEqual(ALL_MODULES);
     expect(resolveModules(createDefaultSettings())).toEqual(ALL_MODULES);
-    expect(isModuleOn(null, 'card')).toBe(true);
+    expect(isModuleOn(null, 'history')).toBe(true);
   });
 
   it('só fica desligado o que foi gravado como desligado (um módulo restrito)', () => {
     const settings = { modules: off('banks') };
     expect(isModuleOn(settings, 'banks')).toBe(false);
-    expect(isModuleOn(settings, 'card')).toBe(true);
+    expect(isModuleOn(settings, 'history')).toBe(true);
   });
 
-  it('não conta como ligado um módulo cujo pai está desligado', () => {
-    const settings = { modules: off('expenses') };
+  it('sem o Diagrama, nada que dependa dele funciona', () => {
+    const settings = { modules: off('diagram') };
     expect(storedModules(settings).history).toBe(true);
-    // Sem Lançamentos, nada que dependa dele funciona.
-    expect(isModuleOn(settings, 'budget')).toBe(false);
     expect(isModuleOn(settings, 'history')).toBe(false);
-    expect(isModuleOn(settings, 'card')).toBe(false);
-    expect(isModuleOn(settings, 'cash')).toBe(true);
+    expect(isModuleOn(settings, 'banks')).toBe(false);
   });
 
-  it('ignora uma chave que não existe mais (um módulo que foi fundido em outro)', () => {
-    const settings = { modules: { expenses: true, cards: false } as Record<string, boolean> };
-    expect(storedModules(settings).expenses).toBe(true);
-    expect(Object.keys(storedModules(settings))).not.toContain('cards');
+  it('ignora uma chave que não existe aqui (um módulo do Capital +)', () => {
+    const settings = { modules: { diagram: true, expenses: false } as Record<string, boolean> };
+    expect(storedModules(settings).diagram).toBe(true);
+    expect(Object.keys(storedModules(settings))).not.toContain('expenses');
   });
 });
 
 describe('dependências', () => {
-  it('lista quem depende de um módulo, direta ou indiretamente', () => {
-    expect(dependentsOf('expenses')).toEqual([
-      'budget',
-      'card',
-      'reimbursable',
-      'history',
-      'recurring',
-    ]);
-    expect(dependentsOf('card')).toEqual([]);
-    expect(dependentsOf('budget')).toEqual(['history']);
-    expect(dependentsOf('reminders')).toEqual([]);
+  it('lista quem depende de um módulo', () => {
+    expect(dependentsOf('diagram')).toEqual(['history', 'banks']);
+    expect(dependentsOf('banks')).toEqual([]);
   });
 
   it('sabe de quem cada módulo depende mais de perto', () => {
-    expect(parentOf('reimbursable')).toBe('expenses');
-    expect(parentOf('history')).toBe('budget');
-    expect(parentOf('cash')).toBeNull();
+    expect(parentOf('history')).toBe('diagram');
+    expect(parentOf('diagram')).toBeNull();
   });
 });
 
-describe('módulos só para VIP', () => {
+describe('módulos restritos', () => {
   const notVip = (...vipModules: ModuleKey[]) => ({ vip: false, vipModules });
 
-  it('começa com Open Finance só para VIP', () => {
+  it('começa com o Open Finance restrito', () => {
     expect(DEFAULT_VIP_MODULES).toEqual(['banks']);
     expect(vipModulesFrom({})).toEqual(['banks']);
   });
 
   it('segue a escolha do dono em Administração, módulo por módulo', () => {
     expect(vipModulesFrom({ banks: false })).toEqual([]);
-    expect(vipModulesFrom({ diagram: true })).toEqual(['banks', 'diagram']);
-    expect(vipModulesFrom({ banks: false, diagram: true })).toEqual(['diagram']);
+    expect(vipModulesFrom({ history: true })).toEqual(['history', 'banks']);
   });
 
-  it('libera tudo para VIP e só o que não é "Só VIP" para os outros', () => {
+  it('libera tudo para quem tem acesso e só o que não é restrito para os outros', () => {
     expect(mayUseModule({ vip: true, vipModules: ['banks'] }, 'banks')).toBe(true);
     expect(mayUseModule(notVip('banks'), 'banks')).toBe(false);
-    expect(mayUseModule(notVip('banks'), 'reminders')).toBe(true);
-    expect(mayUseModule(notVip(), 'banks')).toBe(true);
+    expect(mayUseModule(notVip('banks'), 'history')).toBe(true);
   });
 
-  it('tranca também o que depende de um módulo só VIP', () => {
-    expect(vipLockOf(notVip('expenses'), 'expenses')).toBe('expenses');
-    expect(vipLockOf(notVip('expenses'), 'history')).toBe('expenses');
-    expect(vipLockOf(notVip('expenses'), 'cash')).toBeNull();
-    expect(vipLockOf({ vip: true, vipModules: ['expenses'] }, 'history')).toBeNull();
-  });
-
-  it('esconde o módulo restrito e o que depende dele de quem não tem acesso', () => {
-    expect(isModuleHidden(notVip('expenses'), 'expenses')).toBe(true);
-    expect(isModuleHidden(notVip('expenses'), 'history')).toBe(true);
-    expect(isModuleHidden(notVip('expenses'), 'cash')).toBe(false);
-    expect(isModuleHidden({ vip: true, vipModules: ['expenses'] }, 'history')).toBe(false);
+  it('tranca e esconde também o que depende de um módulo restrito', () => {
+    expect(vipLockOf(notVip('diagram'), 'history')).toBe('diagram');
+    expect(vipLockOf({ vip: true, vipModules: ['diagram'] }, 'history')).toBeNull();
+    expect(isModuleHidden(notVip('diagram'), 'banks')).toBe(true);
+    expect(isModuleHidden(notVip('banks'), 'history')).toBe(false);
   });
 });
 
 describe('withAccessRules', () => {
   it('liga tudo, menos o restrito para quem não tem acesso, seja lá o que foi gravado', () => {
-    const saved = { modules: off('card', 'reminders') };
-    const ruled = withAccessRules(saved, notVipDefault);
+    const ruled = withAccessRules({ modules: off('history') }, notVipDefault);
     expect(ruled.modules).toEqual({ ...ALL_MODULES, banks: false });
-    expect(isModuleOn(ruled, 'card')).toBe(true);
-    expect(isModuleOn(ruled, 'banks')).toBe(false);
   });
 
   it('esconde também o que depende de um módulo restrito', () => {
-    expect(effectiveModules({ vip: false, vipModules: ['budget'] })).toEqual({
-      ...ALL_MODULES,
-      budget: false,
+    expect(effectiveModules({ vip: false, vipModules: ['diagram'] })).toEqual({
+      diagram: false,
       history: false,
+      banks: false,
     });
   });
 
@@ -164,12 +125,5 @@ describe('withAccessRules', () => {
     expect(withAccessRules({ modules: off('banks') }, { vip: true, vipModules: DEFAULT_VIP_MODULES }).modules).toEqual(
       ALL_MODULES,
     );
-  });
-
-  it('dá os módulos mesmo a um envio que não tinha nenhum', () => {
-    expect(withAccessRules({ modules: undefined }, notVipDefault).modules).toEqual({
-      ...ALL_MODULES,
-      banks: false,
-    });
   });
 });

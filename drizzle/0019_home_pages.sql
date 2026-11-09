@@ -1,1 +1,0 @@
-ALTER TABLE "budget_settings" ADD COLUMN "home_pages" jsonb;

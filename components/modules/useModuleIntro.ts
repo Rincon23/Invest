@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { ModuleKey } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import { isModuleOn } from '@/lib/modules';
 import { useSettings } from '@/components/providers/SettingsProvider';
 

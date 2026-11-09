@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { DEFAULT_SPECIAL_CATEGORY_LABELS, type BudgetSettings, type ModuleKey } from '@/lib/budget';
+import type { AppSettings, ModuleKey } from '@/lib/core';
 import { ModuleGate } from '../ModuleGate';
 
 /** Who is looking: an account without access, and the modules the owner made "Restrito". */
 const auth = { user: { vip: false, vipModules: [] as ModuleKey[] } };
 vi.mock('@/components/providers/AuthProvider', () => ({ useAuth: () => auth }));
 
-const settings: BudgetSettings = { topics: [], specialCategories: DEFAULT_SPECIAL_CATEGORY_LABELS, modules: {} };
+const settings: AppSettings = { modules: {} };
 vi.mock('@/components/providers/SettingsProvider', () => ({
   useSettings: () => ({ settings, loading: false }),
 }));
@@ -31,13 +31,13 @@ describe('ModuleGate e os módulos restritos da Administração', () => {
   });
 
   it('esconde também o que depende de um módulo restrito', () => {
-    renderGate('history', { vip: false, vipModules: ['expenses'] });
+    renderGate('history', { vip: false, vipModules: ['diagram'] });
     expect(screen.getByText('Página não encontrada')).toBeInTheDocument();
-    expect(screen.queryByText(/Lançamentos|Histórico/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Diagrama|Histórico/)).not.toBeInTheDocument();
   });
 
   it('um módulo que não é restrito abre para qualquer conta, sem nada para ligar', () => {
-    renderGate('banks', { vip: false, vipModules: ['diagram'] });
+    renderGate('diagram', { vip: false, vipModules: ['banks'] });
     expect(screen.getByText('tela do módulo')).toBeInTheDocument();
   });
 

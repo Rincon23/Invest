@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Multi-stage build for the Capital Next.js app. Produces a small runtime image
+# Multi-stage build for the app Next.js app. Produces a small runtime image
 # from Next's `output: 'standalone'` bundle. Build it on the target arch
 # (e.g. arm64 on an Orange Pi) or with `docker buildx --platform`.
 
@@ -43,6 +43,8 @@ COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nextjs /app/.next/static ./.next/static
 # SQL migrations, applied by the server when it starts (instrumentation.ts).
 COPY --from=builder --chown=nextjs:nextjs /app/drizzle ./drizzle
+# The one-off copy of the Diagrama from the Capital + (run with docker exec; see the README).
+COPY --from=builder --chown=nextjs:nextjs /app/scripts/migrate-from-capital.mjs ./scripts/migrate-from-capital.mjs
 
 USER nextjs
 EXPOSE 3000

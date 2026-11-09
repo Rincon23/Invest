@@ -1,6 +1,5 @@
 import 'server-only';
-import { accountDisplayName, accountKind, MEU_PLUGGY_LIMIT, suggestBankName } from '@/lib/banks';
-import { addDays, zonedMoment } from '@/lib/reminders/time';
+import { MEU_PLUGGY_LIMIT, suggestBankName } from '@/lib/banks';
 import { appBaseUrl } from '../appUrl';
 import { HttpError } from '../httpError';
 import {
@@ -14,19 +13,14 @@ import {
   type PluggyAccount,
   type PluggyInvestment,
   type PluggyItem,
-  type PluggyTransaction,
 } from './pluggy';
-import type {
-  ConnectionUpdate,
-  PostgresBanksRepository,
-  StoredTransaction,
-  SyncedConnection,
-} from './repository';
+import type { ConnectionUpdate, PostgresBanksRepository, SyncedConnection } from './repository';
 
 /**
- * The Open Finance flows the screen drives: checking and saving the person's key, bringing a bank
+ * The Open Finance flows the screen drives: checking and saving the person's key, bringing a broker
  * (create the Meu Pluggy item, send the person to authorize it, read it when they come back),
- * removing one and disconnecting everything. Every call to Pluggy is made here, on the server.
+ * removing one and disconnecting everything. Only the investments are read: they are what the
+ * Diagrama is checked against. Every call to Pluggy is made here, on the server.
  */
 
 /** Pluggy's apiKey lasts 2 h; it is renewed a little before. Only in memory, never stored. */
@@ -35,9 +29,9 @@ const API_KEY_TTL_MS = 110 * 60_000;
 const GIVE_UP_AFTER_MS = 2 * 60_000;
 
 const globalForBanks = globalThis as unknown as {
-  __capitalPluggyKeys?: Map<string, { clientId: string; apiKey: string; expiresAt: number }>;
+  __investPluggyKeys?: Map<string, { clientId: string; apiKey: string; expiresAt: number }>;
 };
-const apiKeys = (globalForBanks.__capitalPluggyKeys ??= new Map());
+const apiKeys = (globalForBanks.__investPluggyKeys ??= new Map());
 
 export function forgetPluggyKey(userId: string): void {
   apiKeys.delete(userId);
@@ -121,7 +115,7 @@ export async function startConnection(
 ): Promise<{ authorizeUrl: string }> {
   const redirectUri = banksRedirectUri();
   if (!redirectUri) {
-    throw new HttpError(503, 'NEEDS_HTTPS', 'Trazer bancos só funciona pelo endereço seguro (https) do Capital +.');
+    throw new HttpError(503, 'NEEDS_HTTPS', 'Trazer bancos só funciona pelo endereço seguro (https) do Invest +.');
   }
   if ((await repo.itemIds()).length >= MEU_PLUGGY_LIMIT) {
     throw new HttpError(
@@ -186,7 +180,7 @@ function toDate(value: string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** Pluggy's status of an item, in the Capital's words. */
+/** Pluggy's status of an item, in the app's words. */
 export function connectionStatusOf(item: PluggyItem): ConnectionUpdate['status'] {
   switch (item.status) {
     case 'UPDATED':
@@ -202,116 +196,55 @@ export function connectionStatusOf(item: PluggyItem): ConnectionUpdate['status']
 
 const numberOrNull = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
-/** The day of a Pluggy timestamp in São Paulo ("2026-10-18T03:00:00.000Z" → "2026-10-18"). */
-function dayOf(value: string | null | undefined): string | null {
-  const date = toDate(value);
-  return date ? zonedMoment(date).date : null;
+/**
+ * The name the app suggests for a bank, from its accounts (null when none came). The accounts are
+ * read only for that: nothing of them is kept.
+ */
+async function suggestedNameOf(client: PluggyClient, itemId: string): Promise<string | null> {
+  try {
+    const { results = [] } = await client.get<{ results?: PluggyAccount[] }>(
+      `/accounts?itemId=${encodeURIComponent(itemId)}`,
+    );
+    const names = results.map((account) => ({
+      type: account.type,
+      subtype: account.subtype,
+      name: account.name,
+      marketingName: account.marketingName,
+      transferNumber: account.bankData?.transferNumber,
+    }));
+    return names.length > 0 ? suggestBankName(names) : null;
+  } catch {
+    return null;
+  }
 }
 
-/**
- * Reads an item's accounts into the database, with their balance as of `balanceAt`; answers the
- * accounts Pluggy sent and the name the Capital suggests for the bank (null when none came).
- */
-async function readAccounts(
-  repo: PostgresBanksRepository,
-  client: PluggyClient,
-  itemId: string,
-  balanceAt: Date | null,
-): Promise<{ accounts: PluggyAccount[]; suggestedName: string | null }> {
-  const { results = [] } = await client.get<{ results?: PluggyAccount[] }>(
-    `/accounts?itemId=${encodeURIComponent(itemId)}`,
-  );
-  const names = results.map((account) => ({
-    type: account.type,
-    subtype: account.subtype,
-    name: account.name,
-    marketingName: account.marketingName,
-    transferNumber: account.bankData?.transferNumber,
-  }));
-  await repo.replaceAccounts(
-    itemId,
-    results.map((account, index) => ({
-      accountId: account.id,
-      kind: accountKind(account.subtype),
-      name: accountDisplayName(names[index]),
-      balance: numberOrNull(account.balance),
-      currency: account.currencyCode ?? null,
-      balanceAt,
-      creditLimit: numberOrNull(account.creditData?.creditLimit),
-      availableCredit: numberOrNull(account.creditData?.availableCreditLimit),
-      dueDate: dayOf(account.creditData?.balanceDueDate),
-    })),
-  );
-  return { accounts: results, suggestedName: results.length > 0 ? suggestBankName(names) : null };
-}
-
-/**
- * Reads an item's investments (they can feed the Reserva). Best effort: a bank whose investments
- * fail to come still has its accounts and transactions read.
- */
+/** Reads an item's investments into the database, with their balance as of `balanceAt`. */
 async function readInvestments(
   repo: PostgresBanksRepository,
   client: PluggyClient,
   itemId: string,
   balanceAt: Date | null,
 ): Promise<void> {
-  try {
-    const { results = [] } = await client.get<{ results?: PluggyInvestment[] }>(
-      `/investments?itemId=${encodeURIComponent(itemId)}`,
-    );
-    await repo.replaceInvestments(
-      itemId,
-      results.map((investment) => ({
-        investmentId: investment.id,
-        name: (investment.name ?? '').trim() || 'Investimento',
-        type: investment.type ?? null,
-        subtype: investment.subtype ?? null,
-        code: investment.code?.trim() || null,
-        isin: investment.isin?.trim() || null,
-        quantity: numberOrNull(investment.quantity),
-        balance: numberOrNull(investment.balance),
-        balanceAt,
-      })),
-    );
-  } catch (err) {
-    console.warn(
-      `[bancos] investimentos do item ${itemId.slice(0, 8)} não vieram:`,
-      err instanceof Error ? err.message : err,
-    );
-  }
+  const { results = [] } = await client.get<{ results?: PluggyInvestment[] }>(
+    `/investments?itemId=${encodeURIComponent(itemId)}`,
+  );
+  await repo.replaceInvestments(
+    itemId,
+    results.map((investment) => ({
+      investmentId: investment.id,
+      name: (investment.name ?? '').trim() || 'Investimento',
+      type: investment.type ?? null,
+      subtype: investment.subtype ?? null,
+      code: investment.code?.trim() || null,
+      isin: investment.isin?.trim() || null,
+      quantity: numberOrNull(investment.quantity),
+      balance: numberOrNull(investment.balance),
+      balanceAt,
+    })),
+  );
 }
 
-/** A Pluggy transaction as the Capital keeps it. */
-export function transactionRow(transaction: PluggyTransaction, accountId: string): StoredTransaction {
-  const payment = transaction.paymentData;
-  const card = transaction.creditCardMetadata;
-  const integerOrNull = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) ? value : null);
-  return {
-    transactionId: transaction.id,
-    accountId,
-    date: dayOf(transaction.date) ?? zonedMoment(new Date()).date,
-    amount: transaction.amount,
-    currency: transaction.currencyCode ?? null,
-    description: (transaction.description || transaction.descriptionRaw || '').trim(),
-    descriptionRaw: transaction.descriptionRaw ?? null,
-    type: transaction.type ?? (transaction.amount < 0 ? 'DEBIT' : 'CREDIT'),
-    status: transaction.status ?? 'POSTED',
-    category: transaction.category ?? null,
-    operationType: transaction.operationType ?? null,
-    paymentMethod: payment?.paymentMethod ?? null,
-    payerName: payment?.payer?.name ?? null,
-    payerDocument: payment?.payer?.documentNumber?.value ?? null,
-    receiverName: payment?.receiver?.name ?? null,
-    receiverDocument: payment?.receiver?.documentNumber?.value ?? null,
-    merchantName: transaction.merchant?.name ?? transaction.merchant?.businessName ?? null,
-    installmentNumber: integerOrNull(card?.installmentNumber),
-    totalInstallments: integerOrNull(card?.totalInstallments),
-    purchaseDate: dayOf(card?.purchaseDate),
-    billId: card?.billId ?? null,
-  };
-}
-
-/** Reads one arriving item into the database (its accounts, once it is done); answers its status. */
+/** Reads one arriving item into the database (its investments, once it is done); answers its status. */
 async function readItem(
   repo: PostgresBanksRepository,
   client: PluggyClient,
@@ -326,12 +259,20 @@ async function readItem(
     consentExpiresAt: toDate(item.consentExpiresAt),
   };
   if (status === 'ok') {
-    // The transactions come with the next sync (the job, or "Buscar novidades"): a year of them
-    // takes a while, and the screen is waiting. The investments are one call: they come now, so
-    // "Conferir investimentos" works as soon as the bank arrives.
-    const { suggestedName } = await readAccounts(repo, client, item.id, lastUpdatedAt);
+    // The investments are one call: they come now, so "Conferir investimentos" works as soon as
+    // the bank arrives.
+    const suggestedName = await suggestedNameOf(client, item.id);
     if (suggestedName) update.suggestedName = suggestedName;
-    await readInvestments(repo, client, item.id, lastUpdatedAt);
+    try {
+      await readInvestments(repo, client, item.id, lastUpdatedAt);
+      update.syncedUpdateAt = lastUpdatedAt;
+    } catch (err) {
+      // The bank arrived anyway; the next sync reads its investments again.
+      console.warn(
+        `[bancos] investimentos do item ${item.id.slice(0, 8)} não vieram:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
   await repo.updateConnection(item.id, update);
   return status;
@@ -339,7 +280,7 @@ async function readItem(
 
 /**
  * The banks still on their way (just authorized, or the person never finished): reads each one.
- * The ones that arrived get their accounts and a suggested name; the ones whose link expired long
+ * The ones that arrived get their investments and a suggested name; the ones whose link expired long
  * ago without an authorization are removed, here and at Pluggy. Answers how many were given up.
  */
 export async function refreshPending(
@@ -394,27 +335,16 @@ export async function refreshPending(
   return { givenUp: abandoned.length };
 }
 
-/** How far back the first read goes (Open Finance hands about a year). */
-const FIRST_READ_DAYS = 365;
-/** A later read goes back this far before the last one: a pending one may have changed meanwhile. */
-const REREAD_DAYS = 7;
-
 /** What one bank's sync brought. */
 export interface BankSyncResult {
   itemId: string;
   /** Whether the bank had sent new data since the last read. */
   changed: boolean;
-  /** The transactions seen for the first time. */
-  added: string[];
-  /** The bank's first read (a year back): nothing in it is news to alert about. */
-  firstRead: boolean;
 }
 
 /**
  * Asks Pluggy about one bank that already arrived. Only when the bank sent data since the last
- * read (its `lastUpdatedAt` moved) are the accounts and the transactions read again: from a year
- * back the first time, then from the last read minus 7 days. A transaction is kept by its id, so
- * reading it again only updates it.
+ * read (its `lastUpdatedAt` moved) are the investments read again.
  */
 export async function syncConnection(
   repo: PostgresBanksRepository,
@@ -422,7 +352,7 @@ export async function syncConnection(
   connection: SyncedConnection,
   now: Date,
 ): Promise<BankSyncResult> {
-  const unchanged: BankSyncResult = { itemId: connection.itemId, changed: false, added: [], firstRead: false };
+  const unchanged: BankSyncResult = { itemId: connection.itemId, changed: false };
   const reply = await client.call('GET', `/items/${encodeURIComponent(connection.itemId)}`);
   if (reply.status === 404) {
     // Gone at Pluggy (revoked or deleted there): the person brings it again.
@@ -458,26 +388,23 @@ export async function syncConnection(
     return unchanged;
   }
 
-  const { accounts, suggestedName } = await readAccounts(repo, client, connection.itemId, lastUpdatedAt);
+  const suggestedName = await suggestedNameOf(client, connection.itemId);
   if (suggestedName) update.suggestedName = suggestedName;
-  await readInvestments(repo, client, connection.itemId, lastUpdatedAt);
-  const today = zonedMoment(now).date;
-  const from = connection.syncedUpdateAt
-    ? addDays(zonedMoment(connection.syncedUpdateAt).date, -REREAD_DAYS)
-    : addDays(today, -FIRST_READ_DAYS);
-  const added: string[] = [];
-  for (const account of accounts) {
-    const transactions = await client.allTransactions(account.id, from, today);
-    added.push(...(await repo.upsertTransactions(transactions.map((t) => transactionRow(t, account.id)))));
+  try {
+    await readInvestments(repo, client, connection.itemId, lastUpdatedAt);
+  } catch (err) {
+    // What Pluggy said about the bank still counts; its investments are read again next time.
+    await repo.updateConnection(connection.itemId, update);
+    throw err;
   }
   // Only once everything is in: a read that broke halfway is done again next time.
   update.syncedUpdateAt = lastUpdatedAt;
   await repo.updateConnection(connection.itemId, update);
-  return { itemId: connection.itemId, changed: true, added, firstRead: connection.syncedUpdateAt === null };
+  return { itemId: connection.itemId, changed: true };
 }
 
-const globalForSync = globalThis as unknown as { __capitalBanksSyncing?: Set<string> };
-const syncing = (globalForSync.__capitalBanksSyncing ??= new Set());
+const globalForSync = globalThis as unknown as { __investBanksSyncing?: Set<string> };
+const syncing = (globalForSync.__investBanksSyncing ??= new Set());
 
 /**
  * Everything of one person: the banks on their way, then every bank that already arrived. A bank
@@ -509,8 +436,6 @@ export async function syncUser(
         );
       }
     }
-    // The Reserva follows the balances the person marked, when they changed.
-    if (results.some((result) => result.changed)) await repo.writeReserve();
     return results;
   } finally {
     syncing.delete(userId);
@@ -523,12 +448,12 @@ async function removeItems(client: PluggyClient, itemIds: string[]): Promise<voi
     try {
       await client.call('DELETE', `/items/${encodeURIComponent(itemId)}`);
     } catch {
-      // Already gone, or Pluggy away: the Capital forgets it anyway.
+      // Already gone, or Pluggy away: the app forgets it anyway.
     }
   }
 }
 
-/** Takes one bank out of the Capital (and out of the person's Pluggy application). */
+/** Takes one bank out of the app (and out of the person's Pluggy application). */
 export async function removeConnection(
   repo: PostgresBanksRepository,
   userId: string,
@@ -536,19 +461,19 @@ export async function removeConnection(
   fetchImpl: FetchLike = fetch,
 ): Promise<void> {
   if (!(await repo.hasConnection(itemId))) {
-    throw new HttpError(404, 'NOT_FOUND', 'Este banco não está mais no Capital +.');
+    throw new HttpError(404, 'NOT_FOUND', 'Este banco não está mais no Invest +.');
   }
   try {
     await removeItems(await clientFor(repo, userId, fetchImpl), [itemId]);
   } catch {
-    // Without the key or Pluggy, the bank still leaves the Capital.
+    // Without the key or Pluggy, the bank still leaves the app.
   }
   await repo.deleteConnections([itemId]);
 }
 
 /**
  * "Desconectar": every bank leaves the person's Pluggy application, and the key and the banks leave
- * the Capital. The banks stay connected in Meu Pluggy itself, where the person removes them if they
+ * the app. The banks stay connected in Meu Pluggy itself, where the person removes them if they
  * want to.
  */
 export async function disconnectAll(

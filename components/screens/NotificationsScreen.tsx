@@ -4,12 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Bell,
-  Clock,
-  Repeat,
-  CreditCard,
   Landmark,
-  Lightbulb,
-  Mail,
   Settings as SettingsIcon,
   Sparkles,
   Trash2,
@@ -32,13 +27,8 @@ import {
 } from '@/lib/notifications';
 
 const CATEGORY_VISUAL: Record<NotificationCategory, { icon: LucideIcon; tone: IconTone }> = {
-  reminder: { icon: Clock, tone: 'amber' },
-  card: { icon: CreditCard, tone: 'orange' },
-  recurring: { icon: Repeat, tone: 'blue' },
-  gmail: { icon: Mail, tone: 'red' },
   banks: { icon: Landmark, tone: 'blue' },
   feature: { icon: Sparkles, tone: 'purple' },
-  motivation: { icon: Lightbulb, tone: 'green' },
   system: { icon: Bell, tone: 'neutral' },
 };
 
@@ -143,7 +133,7 @@ export function NotificationsScreen() {
         <div className="border-border bg-card mx-4 flex flex-col items-center gap-2 rounded-2xl border p-6 text-center shadow-sm">
           <IconTile icon={Bell} tone="neutral" size="lg" />
           <p className="text-foreground font-semibold">Nada por aqui ainda</p>
-          <p className="text-muted text-sm">Tudo que o Capital + te avisar aparece nesta lista.</p>
+          <p className="text-muted text-sm">Tudo que o Invest + te avisar aparece nesta lista.</p>
         </div>
       ) : (
         <>

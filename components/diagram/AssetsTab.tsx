@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { Check, ChevronDown, Landmark, ListChecks, Plus, RefreshCw, Search } from 'lucide-react';
 import {
   bankNames,
@@ -10,8 +9,9 @@ import {
   type AssetCheck,
   type BankHoldings,
   type BankOnlyHolding,
+  type OutsideMark,
 } from '@/lib/banks';
-import { amountToInputValue, formatBRL, parseAmountInput, todayISO } from '@/lib/budget';
+import { amountToInputValue, formatBRL, parseAmountInput, todayISO } from '@/lib/core';
 import {
   assetType,
   assetValue,
@@ -70,19 +70,22 @@ function shares(quantity: number): string {
 
 /**
  * Under an asset, what the banks hold of it: "✓ Confere com BTG Pactual", or "BTG Pactual: 120 ·
- * aqui: 100" with "Usar 120". Nothing changes until the person taps.
+ * aqui: 100" with "Usar 120" and, when the bank has more, "Deixar 20 fora" (of the Diagrama).
+ * Nothing changes until the person taps.
  */
 function BankCheckLine({
   check,
   saving,
   onUse,
+  onKeepOutside,
 }: {
   check: AssetCheck;
   saving: boolean;
   onUse: (quantity: number) => void;
+  onKeepOutside: (quantity: number) => void;
 }) {
   const where = bankNames(check.banks);
-  const reserve = check.reserve > 0 ? ` (${shares(check.reserve)} na Reserva)` : '';
+  const reserve = check.outside > 0 ? ` (${shares(check.outside)} fora do Diagrama)` : '';
   if (check.status === 'match') {
     return (
       <p className="text-success -mt-1.5 flex items-center gap-1 px-4 pb-2 text-xs">
@@ -105,26 +108,34 @@ function BankCheckLine({
           </span>
         )}
       </p>
-      {check.use !== null ? (
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => check.use !== null && onUse(check.use)}
-          className="border-border text-primary min-h-[32px] shrink-0 rounded-lg border px-2.5 font-semibold disabled:opacity-50"
-        >
-          {saving
-            ? 'Salvando…'
-            : check.reserve > 0
-              ? `Deixar ${shares(check.use)} aqui`
-              : `Usar ${shares(check.use)}`}
-        </button>
-      ) : check.reserve > 0 ? (
-        <Link href="/carteira/caixa?aba=investida" className="text-primary shrink-0 font-semibold">
-          Ver a Reserva
-        </Link>
-      ) : (
-        <span className="text-muted shrink-0">Em 2 tipos: ajuste na ficha</span>
-      )}
+      <span className="flex shrink-0 flex-col items-end gap-1">
+        {check.use !== null ? (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => check.use !== null && onUse(check.use)}
+            className="border-border text-primary min-h-[32px] rounded-lg border px-2.5 font-semibold disabled:opacity-50"
+          >
+            {saving
+              ? 'Salvando…'
+              : check.outside > 0
+                ? `Deixar ${shares(check.use)} aqui`
+                : `Usar ${shares(check.use)}`}
+          </button>
+        ) : (
+          <span className="text-muted">Em 2 tipos: ajuste na ficha</span>
+        )}
+        {check.keepOutside !== null && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => check.keepOutside !== null && onKeepOutside(check.keepOutside)}
+            className="text-primary min-h-[28px] px-1 font-semibold disabled:opacity-50"
+          >
+            Deixar {shares(check.bank - check.capital)} fora
+          </button>
+        )}
+      </span>
     </div>
   );
 }
@@ -193,6 +204,8 @@ function BanksCheckCard({
   onlyDifferent,
   onToggleDifferent,
   onAdd,
+  onOutside,
+  onBackIn,
 }: {
   holdings: BankHoldings;
   check: ReturnType<typeof checkHoldings>;
@@ -200,11 +213,15 @@ function BanksCheckCard({
   onlyDifferent: boolean;
   onToggleDifferent: () => void;
   onAdd: (item: BankOnlyHolding) => void;
+  /** "Fora do Diagrama": the bank's whole position of the ticker stops being checked. */
+  onOutside: (ticker: string) => void;
+  /** "Voltar a conferir": the ticker is checked in full again. */
+  onBackIn: (ticker: string) => void;
 }) {
   const [now] = useState(() => Date.now());
   const [showOnlyBank, setShowOnlyBank] = useState(check.onlyBank.length <= ONLY_BANK_OPEN_UP_TO);
+  const [showOutside, setShowOutside] = useState(false);
   const status = holdingsStatusLine(holdings.banks, check.banks, now);
-  const above = check.reserveAbove;
   return (
     <section className="border-border bg-card mx-4 flex flex-col gap-2 rounded-xl border p-3 shadow-sm">
       <p className="text-muted flex gap-2 text-xs">
@@ -216,7 +233,7 @@ function BanksCheckCard({
           Uma compra leva uns 2 dias úteis para aparecer (liquidação na B3), por isso nada muda sozinho.
         </span>
       </p>
-      {differing === 0 && check.onlyBank.length === 0 && !above && (
+      {differing === 0 && check.onlyBank.length === 0 && (
         <p className="text-success flex items-center gap-1 text-sm font-semibold">
           <Check aria-hidden className="h-4 w-4 shrink-0" />
           Tudo confere com {bankNames(check.banks)}.
@@ -258,31 +275,65 @@ function BanksCheckCard({
                     <span className="text-foreground block text-sm font-semibold">{item.ticker}</span>
                     <span className="text-muted block truncate text-xs">
                       {bankNames(item.banks)}: {shares(item.bank)}
-                      {item.reserve > 0 ? ` (${shares(item.reserve)} na Reserva)` : ''}
+                      {item.outside > 0 ? ` (${shares(item.outside)} fora do Diagrama)` : ''}
                       {item.name && item.name !== item.ticker ? ` · ${item.name}` : ''}
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => onAdd(item)}
-                    className="border-border text-primary min-h-[36px] shrink-0 rounded-lg border px-3 text-sm font-semibold"
-                  >
-                    Adicionar
-                  </button>
+                  <span className="flex shrink-0 flex-col items-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onAdd(item)}
+                      className="border-border text-primary min-h-[36px] rounded-lg border px-3 text-sm font-semibold"
+                    >
+                      Adicionar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOutside(item.ticker)}
+                      className="text-muted min-h-[28px] px-1 text-xs font-semibold"
+                    >
+                      Fora do Diagrama
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>
           )}
         </div>
       )}
-      {above && (
-        <p className="text-muted text-xs">
-          Reserva investida: {shares(above.reserve)} cotas de {above.ticker} · {bankNames(above.banks)}:{' '}
-          {shares(above.bank)}.{' '}
-          <Link href="/carteira/caixa?aba=investida" className="text-primary font-semibold">
-            Ver a Reserva
-          </Link>
-        </p>
+      {check.outside.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            onClick={() => setShowOutside((open) => !open)}
+            aria-expanded={showOutside}
+            className="text-muted flex min-h-[36px] items-center gap-1 self-start text-sm font-semibold"
+          >
+            <ChevronDown aria-hidden className={`h-4 w-4 transition-transform ${showOutside ? 'rotate-180' : ''}`} />
+            Fora do Diagrama ({check.outside.length})
+          </button>
+          {showOutside && (
+            <ul className="divide-border divide-y">
+              {check.outside.map((item) => (
+                <li key={item.ticker} className="flex min-h-[44px] items-center gap-2 py-1.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="text-foreground block text-sm font-semibold">{item.ticker}</span>
+                    <span className="text-muted block truncate text-xs">
+                      {item.all ? `Tudo: ${shares(item.quantity)}` : shares(item.quantity)} · {bankNames(item.banks)}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onBackIn(item.ticker)}
+                    className="text-primary min-h-[36px] shrink-0 px-2 text-sm font-semibold"
+                  >
+                    Voltar a conferir
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </section>
   );
@@ -296,6 +347,7 @@ function BanksCheckCard({
 export function AssetsTab({
   overview,
   holdings,
+  onOutsideChanged,
   checkBanks,
   onOpenAsset,
   onAddAsset,
@@ -305,8 +357,10 @@ export function AssetsTab({
   onChanged,
 }: {
   overview: DiagramOverview;
-  /** What the banks hold (Open Finance on, VIP); null hides every comparison. */
+  /** What the banks hold (Open Finance on, with access); null hides every comparison. */
   holdings: BankHoldings | null;
+  /** The "Fora do Diagrama" marks after a change here. */
+  onOutsideChanged: (outside: OutsideMark[]) => void;
   /** Came from "Conferir investimentos" (Open Finance): only what differs, the check in view. */
   checkBanks?: boolean;
   onOpenAsset: (asset: DiagramAsset) => void;
@@ -371,6 +425,26 @@ export function AssetsTab({
       showToast(err instanceof Error ? err.message : 'Não foi possível salvar.', 'error');
     } finally {
       setUsingBank(null);
+    }
+  }
+
+  /** "Fora do Diagrama" (null: all the bank holds) or "Voltar a conferir" (undefined). */
+  async function markOutside(ticker: string, quantity: number | null | undefined) {
+    if (!holdings) return;
+    try {
+      if (quantity === undefined) await diagramRepository.removeOutside(ticker);
+      else await diagramRepository.setOutside(ticker, quantity);
+      const rest = holdings.outside.filter((mark) => mark.ticker !== ticker);
+      onOutsideChanged(quantity === undefined ? rest : [...rest, { ticker, quantity }]);
+      showToast(
+        quantity === undefined
+          ? `${ticker} volta a ser conferido.`
+          : quantity === null
+            ? `${ticker} fica fora do Diagrama.`
+            : `${shares(quantity)} de ${ticker} ficam fora do Diagrama.`,
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Não foi possível salvar.', 'error');
     }
   }
 
@@ -445,6 +519,8 @@ export function AssetsTab({
             onlyDifferent={showOnlyDifferent}
             onToggleDifferent={() => setOnlyDifferent(!showOnlyDifferent)}
             onAdd={onAddFromBank}
+            onOutside={(ticker) => void markOutside(ticker, null)}
+            onBackIn={(ticker) => void markOutside(ticker, undefined)}
           />
         ) : (
           holdings &&
@@ -561,6 +637,7 @@ export function AssetsTab({
                               check={check.assets[asset.id]}
                               saving={usingBank === asset.id}
                               onUse={(quantity) => void applyBankQuantity(asset, quantity)}
+                              onKeepOutside={(quantity) => void markOutside(asset.ticker, quantity)}
                             />
                           )
                         }

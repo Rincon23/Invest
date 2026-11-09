@@ -12,7 +12,7 @@ export const PLUGGY_API = 'https://api.pluggy.ai';
 export const MEU_PLUGGY_CONNECTOR_ID = 200;
 const TIMEOUT_MS = 20_000;
 
-/** The parts of a Pluggy item the Capital reads. */
+/** The parts of a Pluggy item the app reads. */
 export interface PluggyItem {
   id: string;
   /** UPDATED, UPDATING, WAITING_USER_INPUT, LOGIN_ERROR or OUTDATED. */
@@ -27,7 +27,7 @@ export interface PluggyItem {
   userAction?: { attributes?: Record<string, unknown> | null } | null;
 }
 
-/** The parts of a Pluggy account the Capital reads. */
+/** The parts of a Pluggy account the app reads. */
 export interface PluggyAccount {
   id: string;
   type?: string | null;
@@ -44,7 +44,7 @@ export interface PluggyAccount {
   } | null;
 }
 
-/** The parts of a Pluggy investment the Capital keeps (GET /investments). */
+/** The parts of a Pluggy investment the app keeps (GET /investments). */
 export interface PluggyInvestment {
   id: string;
   name?: string | null;
@@ -64,7 +64,7 @@ interface PluggyParty {
   documentNumber?: { value?: string | null } | null;
 }
 
-/** The parts of a Pluggy transaction the Capital keeps (GET /v2/transactions). */
+/** The parts of a Pluggy transaction the app keeps (GET /v2/transactions). */
 export interface PluggyTransaction {
   id: string;
   accountId?: string | null;

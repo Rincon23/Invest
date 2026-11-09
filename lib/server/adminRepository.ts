@@ -1,10 +1,10 @@
 import 'server-only';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { AdminModule, AdminUser } from '../admin/types';
-import type { ModuleKey } from '../budget/types';
+import type { ModuleKey } from '../core/types';
 import { effectiveModules, MODULE_KEYS, resolveModules } from '../modules';
 import { vipModules } from './access';
-import { budgetSettings, moduleAccess, session, user, vipUsers } from './db/schema';
+import { settings, moduleAccess, session, user, vipUsers } from './db/schema';
 import type { Database } from './db/types';
 import { isHomeTemplateEmail } from './homeTemplate';
 import { isOwnerEmail } from './owner';
@@ -80,11 +80,11 @@ export async function setModuleVip(db: Database, key: ModuleKey, vipOnly: boolea
 /** The module switches of every account without access to the restricted modules. */
 async function accountsWithoutVip(db: Database, userId?: string) {
   const rows = await db
-    .select({ userId: budgetSettings.userId, modules: budgetSettings.modules, email: user.email })
-    .from(budgetSettings)
-    .innerJoin(user, eq(user.id, budgetSettings.userId))
-    .leftJoin(vipUsers, eq(vipUsers.userId, budgetSettings.userId))
-    .where(and(isNull(vipUsers.userId), userId ? eq(budgetSettings.userId, userId) : undefined));
+    .select({ userId: settings.userId, modules: settings.modules, email: user.email })
+    .from(settings)
+    .innerJoin(user, eq(user.id, settings.userId))
+    .leftJoin(vipUsers, eq(vipUsers.userId, settings.userId))
+    .where(and(isNull(vipUsers.userId), userId ? eq(settings.userId, userId) : undefined));
   return rows.filter((row) => !isOwnerEmail(row.email) && !isHomeTemplateEmail(row.email));
 }
 
@@ -102,15 +102,15 @@ export async function syncModules(
   const restricted = await vipModules(db);
   const rows = await db
     .select({
-      userId: budgetSettings.userId,
-      modules: budgetSettings.modules,
+      userId: settings.userId,
+      modules: settings.modules,
       email: user.email,
       vip: sql<boolean>`${vipUsers.userId} is not null`,
     })
-    .from(budgetSettings)
-    .innerJoin(user, eq(user.id, budgetSettings.userId))
-    .leftJoin(vipUsers, eq(vipUsers.userId, budgetSettings.userId))
-    .where(userId ? eq(budgetSettings.userId, userId) : undefined);
+    .from(settings)
+    .innerJoin(user, eq(user.id, settings.userId))
+    .leftJoin(vipUsers, eq(vipUsers.userId, settings.userId))
+    .where(userId ? eq(settings.userId, userId) : undefined);
 
   let count = 0;
   for (const row of rows) {
@@ -118,7 +118,7 @@ export async function syncModules(
     const modules = effectiveModules({ vip, vipModules: restricted });
     if (MODULE_KEYS.every((key) => row.modules[key] === modules[key])) continue;
     const had = resolveModules(row.modules);
-    await db.update(budgetSettings).set({ modules }).where(eq(budgetSettings.userId, row.userId));
+    await db.update(settings).set({ modules }).where(eq(settings.userId, row.userId));
     if (lost ? had[lost] && !modules[lost] : true) count += 1;
   }
   return count;

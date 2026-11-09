@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Link inválido — Capital +',
+  title: 'Link inválido — Invest +',
 };
 
 export default function AuthCodeErrorPage() {

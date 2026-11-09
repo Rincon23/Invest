@@ -1,5 +1,5 @@
 /**
- * How a sideways swipe feels in Capital, the way a phone's home screen pages: the screen follows
+ * How a sideways swipe feels in the app, the way a phone's home screen pages: the screen follows
  * the finger, gives a little and springs back where there is nothing on that side, and changes
  * page past 30% of its width or on a quick flick. Shared by everything that pages sideways (the
  * áreas de trabalho of the Início) and, for the vertical drags (the app drawer, the widget tray),

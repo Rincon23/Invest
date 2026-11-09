@@ -1,30 +1,25 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { normalizeSettings, type BudgetSettings, type Tag } from '@/lib/budget';
+import { normalizeSettings, type AppSettings } from '@/lib/core';
 import { withAccessRules } from '@/lib/modules';
-import { budgetRepository } from '@/lib/storage';
+import { settingsRepository } from '@/lib/storage';
 import { toStorageErrorMessage } from '@/lib/storage/errors';
 import { useAuth } from './AuthProvider';
 
 interface SettingsContextValue {
-  settings: BudgetSettings | null;
+  settings: AppSettings | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  saveSettings: (settings: BudgetSettings) => Promise<void>;
-  /**
-   * The tags as the server answered after one of their operations (lib/storage/tags.ts). Only
-   * these and `refresh` change the tags here: a save of the settings never does.
-   */
-  setTags: (tags: Tag[]) => void;
+  saveSettings: (settings: AppSettings) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [settings, setSettings] = useState<BudgetSettings | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /**
@@ -39,9 +34,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await budgetRepository.getSettings();
+      const data = await settingsRepository.getSettings();
       notices.current = data.dismissedNotices ?? [];
-      // Backfill any missing category colors (older data) so the UI is stable.
       setSettings(normalizeSettings(data));
     } catch (err) {
       setError(toStorageErrorMessage(err, 'Não foi possível carregar suas configurações.'));
@@ -58,7 +52,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const saveSettings = useCallback(
-    (next: BudgetSettings) => {
+    (next: AppSettings) => {
       const seen = [...new Set([...notices.current, ...(next.dismissedNotices ?? [])])];
       notices.current = seen;
       const run = async () => {
@@ -67,9 +61,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           normalizeSettings(seen.length > 0 ? { ...next, dismissedNotices: seen } : next),
           user,
         );
-        await budgetRepository.saveSettings(normalized);
-        // The server keeps its tags on an ordinary save; so does this copy.
-        setSettings((current) => ({ ...normalized, tags: current?.tags ?? normalized.tags }));
+        await settingsRepository.saveSettings(normalized);
+        setSettings(normalized);
       };
       const saved = queue.current.then(run, run);
       queue.current = saved.catch(() => {});
@@ -78,10 +71,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
-  const setTags = useCallback((tags: Tag[]) => {
-    setSettings((current) => (current ? { ...current, tags } : current));
-  }, []);
-
   // A failure here blocks every screen (they all need settings), so surface it
   // in place rather than letting each screen spin on "Carregando…".
   if (error && !settings) {
@@ -89,7 +78,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SettingsContext.Provider value={{ settings, loading, error, refresh, saveSettings, setTags }}>
+    <SettingsContext.Provider value={{ settings, loading, error, refresh, saveSettings }}>
       {children}
     </SettingsContext.Provider>
   );

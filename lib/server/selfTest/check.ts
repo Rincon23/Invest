@@ -1,16 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
-import { currentMonthKey, todayISO } from '../../budget/date';
-import type { Month } from '../../budget/types';
+import { todayISO } from '../../core/date';
 import { effectiveModules } from '../../modules';
 import { PostgresBanksRepository } from '../banks/repository';
-import { PostgresBudgetRepository } from '../budgetRepository';
-import { budgetSettings, user } from '../db/schema';
+import { settings, user } from '../db/schema';
 import type { Database } from '../db/types';
 import { PostgresDiagramRepository } from '../diagramRepository';
-import { PostgresMissionsRepository } from '../missionsRepository';
-import { PostgresRemindersRepository } from '../remindersRepository';
-import { PostgresWalletRepository } from '../walletRepository';
+import { PostgresSettingsRepository } from '../settingsRepository';
 
 /**
  * What one automatic test is (lib/server/selfTest). A test passes by returning nothing and fails
@@ -22,8 +18,8 @@ export interface SelfCheck {
   id: string;
   name: string;
   /**
-   * Depends on a free service outside the Capital (B3, Yahoo, Fundamentus, Google, the AI on the
-   * board): when it fails, it is a warning — the fix is not in the code.
+   * Depends on a free service outside the app (B3, Yahoo, Fundamentus): when it fails, it is a
+   * warning — the fix is not in the code.
    */
   external?: boolean;
   run(ctx: CheckContext): Promise<CheckOutcome | void>;
@@ -47,15 +43,11 @@ export interface ScratchAccount {
   /** The open transaction, for the reads a repository doesn't offer. */
   db: Database;
   userId: string;
-  budget: PostgresBudgetRepository;
-  wallet: PostgresWalletRepository;
+  settings: PostgresSettingsRepository;
   diagram: PostgresDiagramRepository;
-  reminders: PostgresRemindersRepository;
-  missions: PostgresMissionsRepository;
   banks: PostgresBanksRepository;
-  /** Today and this month, as the repositories themselves read them. */
+  /** Today, as the repositories themselves read it. */
   today: string;
-  month: Month;
 }
 
 /** A test that did not pass; the message is what Administração shows. */
@@ -115,32 +107,20 @@ async function scratchAccount(db: Database, now: Date): Promise<ScratchAccount> 
   await db
     .insert(user)
     .values({ id: userId, name: 'Autoteste', email: `autoteste-${userId}@autoteste.invalid` });
-  const budget = new PostgresBudgetRepository(db, userId);
-  await budget.getSettings();
+  const accountSettings = new PostgresSettingsRepository(db, userId);
+  await accountSettings.getSettings();
   await db
-    .update(budgetSettings)
+    .update(settings)
     .set({ modules: effectiveModules({ vip: true, vipModules: [] }), onboardingCompleted: true })
-    .where(eq(budgetSettings.userId, userId));
+    .where(eq(settings.userId, userId));
   return {
     db,
     userId,
-    budget,
-    wallet: new PostgresWalletRepository(db, userId, budget),
-    diagram: new PostgresDiagramRepository(db, userId, budget),
-    reminders: new PostgresRemindersRepository(db, userId),
-    missions: new PostgresMissionsRepository(db, userId),
+    settings: accountSettings,
+    diagram: new PostgresDiagramRepository(db, userId),
     banks: new PostgresBanksRepository(db, userId),
     today: todayISO(now),
-    month: currentMonthKey(now),
   };
-}
-
-/** The first category of the given preset in a fresh account ("Prazeres e Confortos", "Investimentos"…). */
-export async function presetTopic(account: ScratchAccount, preset: string): Promise<string> {
-  const settings = await account.budget.getSettings();
-  const topic = settings.topics.find((item) => item.preset === preset && !item.archived);
-  expect(topic, `A conta nova não recebeu a categoria padrão "${preset}".`);
-  return topic.id;
 }
 
 /** Throws unless `promise` rejects (what a refused write looks like to the screen). */

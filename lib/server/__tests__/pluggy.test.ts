@@ -217,7 +217,7 @@ describe('bringing a bank', () => {
       clientUserId: id,
     });
     const [connection] = await banks.listConnections();
-    expect(connection).toMatchObject({ itemId: ITEM, status: 'pending', accounts: [] });
+    expect(connection).toMatchObject({ itemId: ITEM, status: 'pending', investments: 0 });
     const [pending] = await banks.pendingConnections();
     expect(pending.authorizeExpiresAt?.toISOString()).toBe('2026-10-20T13:38:45.085Z');
   });
@@ -262,7 +262,7 @@ describe('a bank arriving', () => {
     expect(holdings.map((holding) => [holding.code, holding.quantity])).toEqual([['PETR4', 120]]);
   });
 
-  it('brings its accounts and a suggested name when Pluggy finishes', async () => {
+  it('brings its investments and a suggested name when Pluggy finishes', async () => {
     const { id, banks } = await newPerson();
     await banks.saveKey('id', 'segredo');
     await banks.addPending(ITEM, new Date('2026-10-20T13:38:45Z'));
@@ -290,10 +290,7 @@ describe('a bank arriving', () => {
       status: 'ok',
       lastUpdatedAt: '2026-10-20T12:57:28.616Z',
       consentExpiresAt: '2027-10-20T13:19:34.167Z',
-      accounts: [
-        { id: 'acc-1', kind: 'checking', name: 'BTG Banking' },
-        { id: 'acc-2', kind: 'card', name: 'Cartão Gold' },
-      ],
+      investments: 0,
     });
 
     // The person's own name stays, whatever is suggested later.
@@ -337,11 +334,11 @@ describe('a bank arriving', () => {
         },
       }),
       'GET /accounts': { body: accounts },
-      'GET /v2/transactions': { body: { results: [], next: null } },
+      'GET /investments': { body: { results: [] } },
     });
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await refreshPending(banks, id, fetchImpl);
-    expect((await banks.listConnections())[0]).toMatchObject({ name: 'Banco', status: 'error', accounts: [] });
+    expect((await banks.listConnections())[0]).toMatchObject({ name: 'Banco', status: 'error', investments: 0 });
     expect(log.mock.calls.flat().join(' ')).toContain('UNEXPECTED_ERROR');
 
     status = 'UPDATED';
@@ -378,11 +375,13 @@ describe('leaving', () => {
     expect((await banks.listConnections()).map((c) => c.itemId)).toEqual(['b']);
   });
 
-  it('"Desconectar" removes every bank at Pluggy and the key and banks from the Capital', async () => {
+  it('"Desconectar" removes every bank at Pluggy and the key and banks from the app', async () => {
     const { id, banks } = await newPerson();
     await banks.saveKey('id', 'segredo');
     await banks.addPending('a', null);
-    await banks.replaceAccounts('a', [{ accountId: 'x', kind: 'checking', name: 'Conta', balance: 1, currency: 'BRL' }]);
+    await banks.replaceInvestments('a', [
+      { investmentId: 'x', name: 'PETR4', type: 'EQUITY', subtype: 'STOCK', code: 'PETR4', quantity: 1, balance: 1, balanceAt: null },
+    ]);
     const { fetchImpl, calls } = fakePluggy({
       'POST /auth': { body: { apiKey: 'chave' } },
       'DELETE /items/a': { body: {} },
@@ -391,7 +390,7 @@ describe('leaving', () => {
     expect(calls.some((call) => call.method === 'DELETE' && call.path === '/items/a')).toBe(true);
     expect(await banks.getKey()).toBeNull();
     expect(await banks.listConnections()).toEqual([]);
-    expect(await db.select().from(schema.bankAccounts).where(eq(schema.bankAccounts.userId, id))).toEqual([]);
+    expect(await db.select().from(schema.bankInvestments).where(eq(schema.bankInvestments.userId, id))).toEqual([]);
   });
 
   it('"Apagar todos os dados" takes the Open Finance along', async () => {

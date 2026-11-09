@@ -3,7 +3,6 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { PushSubscriptionSync } from '@/components/pwa/PushSubscriptionSync';
 import { AppProviders } from '@/components/providers/AppProviders';
-import { LocalDataImportBanner } from '@/components/storage/LocalDataImportBanner';
 import { realName } from '@/lib/auth/names';
 import { userAccess } from '@/lib/server/access';
 import { getAuth } from '@/lib/server/auth';
@@ -38,7 +37,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       }}
     >
       <div className="flex min-h-full flex-1 flex-col">
-        <LocalDataImportBanner />
         {children}
       </div>
       <PushSubscriptionSync />

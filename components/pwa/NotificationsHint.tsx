@@ -7,7 +7,7 @@ import { currentSubscription, pushSupport } from '@/lib/notifications/browser';
 import { InstallAppButton } from './InstallAppButton';
 
 /**
- * A nudge when this device would not receive the notifications (Lembretes, cartões, contas do mês).
+ * A nudge when this device would not receive the notifications (avisos do app).
  * On an iPhone in the browser they can't be turned on: installing the app comes first.
  */
 export function NotificationsHint({ onActivate }: { onActivate: () => void }) {

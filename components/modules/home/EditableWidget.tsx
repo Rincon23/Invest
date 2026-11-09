@@ -3,7 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ArrowLeftRight, Minus, Rows2, Square } from 'lucide-react';
-import type { HomeWidgetKey } from '@/lib/budget';
+import type { HomeWidgetKey } from '@/lib/core';
 import { widgetName } from '@/lib/modules';
 import { Card } from './HomeCards';
 

@@ -31,11 +31,11 @@ export function LoginScreen({
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-8 px-6 py-12">
       <header className="flex flex-col gap-1 text-center">
-        {/* Lido "Capital plus": sem o rótulo, o leitor de tela diria "Capital mais". */}
-        <h1 className="text-foreground text-2xl font-bold" aria-label="Capital plus">
-          Capital +
+        {/* Lido "Invest plus": sem o rótulo, o leitor de tela diria "Invest mais". */}
+        <h1 className="text-foreground text-2xl font-bold" aria-label="Invest plus">
+          Invest +
         </h1>
-        <p className="text-muted text-sm">Orçamento doméstico por categorias</p>
+        <p className="text-muted text-sm">Quanto aportar em cada ativo</p>
       </header>
 
       {mode === 'sign-in' && (
@@ -87,7 +87,7 @@ function SignInForm({
       )}
       {accountDeleted && !state.error && (
         <p className="text-success text-center text-sm" role="status">
-          Conta excluída, com todos os dados dela. Obrigado por ter usado o Capital +.
+          Conta excluída, com todos os dados dela. Obrigado por ter usado o Invest +.
         </p>
       )}
       <label className="text-muted flex flex-col gap-1 text-sm">

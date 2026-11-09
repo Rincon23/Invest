@@ -43,7 +43,7 @@ import {
   RotateCcw,
   Trash2,
 } from 'lucide-react';
-import type { BudgetSettings, HomeWidgetKey } from '@/lib/budget';
+import type { AppSettings, HomeWidgetKey } from '@/lib/core';
 import {
   HOME_HELP_ANCHOR,
   MAX_HOME_PAGES,
@@ -53,7 +53,6 @@ import {
   hiddenHomeCards,
   homeCards,
   homeEditTourSteps,
-  isModuleOn,
   moveWidget,
   pageOfWidget,
   removeWidget,
@@ -69,10 +68,7 @@ import { IN_MS } from '@/components/layout/swipePhysics';
 import { useVerticalDrag } from '@/components/layout/useVerticalDrag';
 import { subscribeHomeReveal } from '@/components/modules/tour/homeReveal';
 import { useTour } from '@/components/modules/tour/TourProvider';
-import { GreetingHeader } from '@/components/month/GreetingHeader';
-import { MissionsBar } from '@/components/missions/MissionsBar';
-import { MonthActions } from '@/components/month/MonthActions';
-import { useMonthContext } from '@/components/month/MonthContext';
+import { GreetingHeader } from '@/components/layout/GreetingHeader';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useSettings } from '@/components/providers/SettingsProvider';
 import { BottomSheet } from '@/components/ui/BottomSheet';
@@ -137,8 +133,7 @@ function pageAfterCleanup(pages: HomePages, index: number): number {
 /**
  * The Início as the home screen of a phone: telas of widgets side by side (swipe between them; the
  * squares above "Apps" say how many there are and which one is open), an up-arrow at the bottom
- * that brings up the app drawer (what used to be the "Mais" tab), and the floating buttons of the
- * month right above it.
+ * that brings up the app drawer.
  *
  * Edit mode (the pencil, or a long press on empty space) works like a phone's: the telas shrink so
  * the neighbours show; a widget is held and then dragged — to another place, to the edge to go to
@@ -146,8 +141,7 @@ function pageAfterCleanup(pages: HomePages, index: number): number {
  * the tray, where the up-arrow was, puts widgets back; and every change is saved straight away
  * (on screen first, undone with an error message if the save fails).
  */
-export function HomeScreen({ settings, openApps }: { settings: BudgetSettings; openApps: boolean }) {
-  const { month } = useMonthContext();
+export function HomeScreen({ settings, openApps }: { settings: AppSettings; openApps: boolean }) {
   const { saveSettings } = useSettings();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -202,7 +196,6 @@ export function HomeScreen({ settings, openApps }: { settings: BudgetSettings; o
     modules: settings.modules,
     homeHidden: layout.hidden,
   });
-  const withActions = isModuleOn(settings, 'expenses');
 
   // What the window listeners and dnd-kit's callbacks read between renders.
   const layoutRef = useRef(layout);
@@ -229,8 +222,6 @@ export function HomeScreen({ settings, openApps }: { settings: BudgetSettings; o
         await saveSettings({
           ...settingsRef.current,
           homePages: options.asDefault ? null : next.pages,
-          // Only the pages are written from now on; the single list of before is left empty.
-          homeOrder: null,
           homeHidden: next.hidden,
           homeCardSizes: next.sizes,
         });
@@ -682,7 +673,7 @@ export function HomeScreen({ settings, openApps }: { settings: BudgetSettings; o
       );
     }
     return (
-      <div className={`flex flex-col gap-4 px-4 pt-3 ${withActions ? 'pb-32' : 'pb-6'}`}>
+      <div className="flex flex-col gap-4 px-4 pt-3 pb-6">
         {widgets.length === 0 ? (
           <EmptyState
             icon={<IconTile icon={LayoutGrid} tone="neutral" size="lg" />}
@@ -761,7 +752,6 @@ export function HomeScreen({ settings, openApps }: { settings: BudgetSettings; o
               <NotificationBell />
             </div>
           </div>
-          {!editing && <MissionsBar />}
           {areasHint.visible && (
             <p
               role="status"
@@ -842,11 +832,8 @@ export function HomeScreen({ settings, openApps }: { settings: BudgetSettings; o
         </DndContext>
       </div>
 
-      {withActions && !editing && <MonthActions placement="home" />}
-
       <AppDrawer
         ref={drawer}
-        month={month}
         onOpened={learnApps}
         onClosed={() => appsButton.current?.focus({ preventScroll: true })}
       />

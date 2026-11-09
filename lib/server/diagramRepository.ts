@@ -1,9 +1,8 @@
 import 'server-only';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
-import { createId } from '../budget/id';
-import { isPriceStale } from '../budget/investments';
-import { round2 } from '../budget/money';
-import type { Expense, Month } from '../budget/types';
+import { createId } from '../core/id';
+import { isPriceStale } from '../core/prices';
+import { round2 } from '../core/money';
 import {
   assetMarket,
   assetType,
@@ -44,13 +43,12 @@ import {
   type QuoteMarket,
   type QuestionType,
 } from '../diagram';
-import { isModuleOn } from '../modules';
-import type { PostgresBudgetRepository } from './budgetRepository';
 import {
   diagramAnswers,
   diagramAssets,
   diagramContributions,
   diagramFixedIncome,
+  diagramOutside,
   diagramQuestions,
   diagramSettings,
   fundamentalsCache,
@@ -58,6 +56,7 @@ import {
   priceHistoryCache,
 } from './db/schema';
 import type { Database, Transaction } from './db/types';
+import { holdingTicker, type OutsideMark } from '../banks/holdings';
 import { HttpError } from './httpError';
 import { fetchFundamentals } from './fundamentals';
 import { checkQuota, QUOTAS } from './quotas';
@@ -168,16 +167,11 @@ function optionalText(value: string | null | undefined): string | null {
   return text ? text : null;
 }
 
-/**
- * The Diagrama on Postgres, scoped to one user. Separate from the Reserva investida and from the
- * Reserva de emergência: nothing here reads or changes them. Only "Lançar em Investimentos" goes
- * through the budget repository, in its transaction, so the month stays consistent.
- */
+/** The Diagrama on Postgres, scoped to one user. */
 export class PostgresDiagramRepository {
   constructor(
     private readonly db: Database,
     private readonly userId: string,
-    private readonly budget: PostgresBudgetRepository,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -845,8 +839,7 @@ export class PostgresDiagramRepository {
 
   /**
    * "Aportar" / "Aportar tudo": adds the quotas to each asset (the R$ to each fixed-income total),
-   * moves their dates, keeps the aporte in the history and — when asked, with Lançamentos on —
-   * launches the total as an expense in the budget's Investimentos category. All or nothing.
+   * moves their dates and keeps the aporte in the history. All or nothing.
    */
   async contribute(input: ContributeInput): Promise<DiagramContribution> {
     const [assets, fixedIncome] = await Promise.all([this.listAssets(), this.listFixedIncome()]);
@@ -880,7 +873,7 @@ export class PostgresDiagramRepository {
     const amount = round2(items.reduce((sum, item) => sum + item.amount, 0));
     const contribution: DiagramContribution = { id: createId(), date: input.date, amount, items };
 
-    const record = async (tx: Transaction, expenseId: string | null) => {
+    await this.db.transaction(async (tx) => {
       for (const item of items) {
         if (item.assetId) {
           const asset = byId.get(item.assetId) as DiagramAsset;
@@ -907,41 +900,7 @@ export class PostgresDiagramRepository {
         date: input.date,
         amount,
         items,
-        expenseId,
       });
-    };
-
-    if (!input.launchExpense) {
-      await this.db.transaction((tx) => record(tx, null));
-      return contribution;
-    }
-
-    const settings = await this.budget.getSettings();
-    // Lançamentos restricted for this account: nowhere to launch the aporte.
-    if (!isModuleOn(settings, 'expenses')) {
-      throw new HttpError(409, 'MODULE_OFF', 'Não dá para lançar o aporte como gasto nesta conta.');
-    }
-    const topic = settings.topics.find((item) => item.preset === 'investimentos' && !item.archived);
-    if (!topic) {
-      throw new HttpError(
-        409,
-        'NO_INVESTMENTS_TOPIC',
-        'Não encontrei a categoria Investimentos no seu orçamento. Aporte sem lançar o gasto.',
-      );
-    }
-    const expense: Expense = {
-      id: createId(),
-      categoryKind: 'topic',
-      topicId: topic.id,
-      description: 'Aporte (Diagrama)',
-      amount,
-      date: input.date,
-      singleInstallmentCard: false,
-      source: 'investment',
-    };
-    await this.budget.writeWith(async ({ tx, addExpense }) => {
-      await addExpense(input.month as Month, expense);
-      await record(tx, expense.id);
     });
     return contribution;
   }
@@ -951,15 +910,16 @@ export class PostgresDiagramRepository {
   // -------------------------------------------------------------------------
 
   async exportData(): Promise<DiagramBackup> {
-    const [settings, assets, fixedIncome, questions, answers, contributions] = await Promise.all([
+    const [settings, assets, fixedIncome, questions, answers, contributions, outside] = await Promise.all([
       this.readSettings(),
       this.listAssets(),
       this.listFixedIncome(),
       this.listQuestions(),
       this.readAnswers(),
       this.listContributions(),
+      this.listOutside(),
     ]);
-    return { settings, assets, fixedIncome, questions, answers, contributions };
+    return { settings, assets, fixedIncome, questions, answers, contributions, outside };
   }
 
   /** Replaces the whole Diagrama of this account with the backup's. */
@@ -1029,12 +989,54 @@ export class PostgresDiagramRepository {
           })),
         );
       }
+      if (backup.outside && backup.outside.length > 0) {
+        await tx
+          .insert(diagramOutside)
+          .values(backup.outside.map((mark) => ({ userId: this.userId, ticker: mark.ticker, quantity: mark.quantity })));
+      }
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // "Fora do Diagrama" (the check against the banks)
+  // -------------------------------------------------------------------------
+
+  /** What the person said the banks hold and is not the Diagrama's, by ticker. */
+  async listOutside(executor: Executor = this.db): Promise<OutsideMark[]> {
+    const rows = await executor
+      .select({ ticker: diagramOutside.ticker, quantity: diagramOutside.quantity })
+      .from(diagramOutside)
+      .where(eq(diagramOutside.userId, this.userId))
+      .orderBy(asc(diagramOutside.ticker));
+    return rows;
+  }
+
+  /** Marks a B3 ticker "Fora do Diagrama": all the banks hold (null) or that many shares. */
+  async setOutside(ticker: string, quantity: number | null): Promise<void> {
+    const code = holdingTicker(ticker);
+    if (!code) throw new HttpError(400, 'INVALID_TICKER', 'Confira o código do ativo.');
+    const existing = await this.listOutside();
+    if (!existing.some((mark) => mark.ticker === code)) {
+      checkQuota(existing.length, QUOTAS.diagramAssets, 'Você já marcou o máximo de ativos fora do Diagrama.');
+    }
+    const values = { quantity: quantity === null ? null : Math.max(0, quantity) || null };
+    await this.db
+      .insert(diagramOutside)
+      .values({ userId: this.userId, ticker: code, ...values })
+      .onConflictDoUpdate({ target: [diagramOutside.userId, diagramOutside.ticker], set: values });
+  }
+
+  /** The ticker goes back to being checked in full. */
+  async removeOutside(ticker: string): Promise<void> {
+    await this.db
+      .delete(diagramOutside)
+      .where(and(eq(diagramOutside.userId, this.userId), eq(diagramOutside.ticker, ticker.trim().toUpperCase())));
   }
 
   /** Everything of the Diagrama of this account. */
   async clear(executor: Executor = this.db): Promise<void> {
     // Answers go with their assets and questions (cascade).
+    await executor.delete(diagramOutside).where(eq(diagramOutside.userId, this.userId));
     await executor.delete(diagramContributions).where(eq(diagramContributions.userId, this.userId));
     await executor.delete(diagramAssets).where(eq(diagramAssets.userId, this.userId));
     await executor.delete(diagramQuestions).where(eq(diagramQuestions.userId, this.userId));

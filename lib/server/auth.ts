@@ -16,7 +16,7 @@ const DAY_IN_SECONDS = 60 * 60 * 24;
  */
 function createAuth() {
   return betterAuth({
-    appName: 'Capital +',
+    appName: 'Invest +',
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     trustedOrigins: allowedOriginHosts().map((host) => `https://${host}`),

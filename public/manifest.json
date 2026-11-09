@@ -1,7 +1,7 @@
 {
-  "name": "Capital + — Orçamento doméstico",
-  "short_name": "Capital +",
-  "description": "Organize sua renda em categorias e acompanhe quanto ainda pode gastar em cada uma, mês a mês.",
+  "name": "Invest + — Investimentos",
+  "short_name": "Invest +",
+  "description": "Quanto aportar em cada ativo, a carteira conferida com a corretora e como ela andou.",
   "start_url": "/",
   "id": "/",
   "scope": "/",
@@ -11,7 +11,7 @@
   "theme_color": "#15803d",
   "lang": "pt-BR",
   "dir": "ltr",
-  "categories": ["finance", "productivity"],
+  "categories": ["finance"],
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

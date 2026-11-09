@@ -3,7 +3,7 @@
 import { useRef, type RefObject } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
-import type { HomeWidgetKey } from '@/lib/budget';
+import type { HomeWidgetKey } from '@/lib/core';
 import { widgetDescription, widgetName } from '@/lib/modules';
 import { drawerCommits } from '@/components/layout/AppDrawer';
 import { BACK_MS, EASE } from '@/components/layout/swipePhysics';

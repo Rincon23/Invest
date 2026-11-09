@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronDown, CircleHelp } from 'lucide-react';
-import { formatBRL, parseAmountInput, todayISO } from '@/lib/budget';
+import { formatBRL, parseAmountInput, todayISO } from '@/lib/core';
 import {
   activeQuestions,
   assetScore,

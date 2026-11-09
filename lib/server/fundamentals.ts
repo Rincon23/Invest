@@ -19,7 +19,7 @@ const FUNDAMENTUS_URL = 'https://www.fundamentus.com.br/detalhes.php';
 const TIMEOUT_MS = 8_000;
 /** Parallel pages: polite, and plenty for a personal portfolio. */
 const CONCURRENCY = 3;
-const HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; Capital/1.0)', Accept: 'text/html' };
+const HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; Invest/1.0)', Accept: 'text/html' };
 
 /** "1,49", "-0,52", "1.234,56" → numbers; "-" and "" → null. */
 export function parseBrazilianNumber(text: string): number | null {

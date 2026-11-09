@@ -288,7 +288,7 @@ function ThisDevice({
   }
 
   const subtitle = active
-    ? 'Ativadas — os lembretes chegam aqui.'
+    ? 'Ativadas — os avisos chegam aqui.'
     : state.blocked
       ? 'Bloqueadas pelo navegador.'
       : 'Desativadas neste aparelho.';
@@ -325,7 +325,7 @@ function ThisDevice({
       ) : state.blocked ? (
         <p className="text-muted text-sm">
           {state.ios
-            ? 'Bloqueado. Libere em Ajustes → Notificações → Capital +.'
+            ? 'Bloqueado. Libere em Ajustes → Notificações → Invest +.'
             : 'Bloqueado. Libere no cadeado do endereço.'}
         </p>
       ) : (

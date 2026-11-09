@@ -8,8 +8,8 @@ import { getAuth } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 
 export const metadata: Metadata = {
-  title: 'Privacidade — Capital +',
-  description: 'Como o Capital + trata os seus dados.',
+  title: 'Privacidade — Invest +',
+  description: 'Como o Invest + trata os seus dados.',
 };
 
 // Depends on who reads it (the restricted modules' sections); never prerendered at build time.
@@ -43,8 +43,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /**
- * The public privacy policy. Reachable without signing in (see PUBLIC_PREFIXES in proxy.ts): it was
- * linked from Google's consent screen while the app had the Gmail monitor, now retired.
+ * The public privacy policy. Reachable without signing in (see PUBLIC_PREFIXES in proxy.ts).
  */
 export default async function PrivacyPage() {
   const access = await readerAccess();
@@ -54,55 +53,43 @@ export default async function PrivacyPage() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-10">
       <header className="flex flex-col gap-1">
-        <p className="text-primary text-sm font-semibold">Capital +</p>
+        <p className="text-primary text-sm font-semibold">Invest +</p>
         <h1 className="text-foreground text-2xl font-bold">Política de privacidade</h1>
-        <p className="text-muted text-sm">Última atualização: 28 de outubro de 2026.</p>
+        <p className="text-muted text-sm">Última atualização: 9 de novembro de 2026.</p>
       </header>
 
-      <Section title="O que é o Capital +">
+      <Section title="O que é o Invest +">
         <p>
-          O Capital + é um app de orçamento doméstico. Ele roda num servidor próprio, com banco de dados
-          próprio: os dados não ficam em serviços de banco na nuvem e não são vendidos nem compartilhados com
-          ninguém. Cada conta só enxerga os próprios dados.
+          O Invest + é um app de investimentos: diz quanto aportar em cada ativo (o Diagrama), mostra como a
+          carteira andou e, se você quiser, confere a carteira com a sua corretora. Ele roda num servidor
+          próprio, com banco de dados próprio: os dados não ficam em serviços de banco na nuvem e não são
+          vendidos nem compartilhados com ninguém. Cada conta só enxerga os próprios dados.
         </p>
       </Section>
 
       <Section title="O que guardamos">
         <ul className="list-disc pl-5">
           <li>Da sua conta: nome, e-mail e a senha em forma cifrada (hash).</li>
-          <li>O que você lança: categorias, rendas, gastos, lembretes e os demais módulos que ligar.</li>
+          <li>O seu Diagrama: tipos e metas, ativos com quantidades e notas, perguntas e aportes.</li>
           <li>
             Para as notificações: o endereço de inscrição do navegador de cada aparelho em que você as ativar.
           </li>
           <li>Um cookie de sessão, só para manter você conectado.</li>
         </ul>
         <p>
-          Quem administra o servidor vê a lista de contas (e-mail, data de criação e último acesso) para
-          liberar recursos e proteger o servidor. Os seus lançamentos não aparecem nessa lista.
+          As cotações vêm da B3 e do Yahoo Finance, e os indicadores (LPA, VPA, P/VP) do Fundamentus, sempre
+          pelo código do ativo: nada da sua conta vai junto.
         </p>
-      </Section>
-
-      <Section title="Gmail">
         <p>
-          O Capital + não tem mais o Monitor de Gmail e não lê nenhum e-mail. A autorização do Google de
-          quem tinha conectado, que ficou guardada cifrada no servidor, não é mais usada. Você pode remover
-          o acesso do Capital + na sua Conta Google, em{' '}
-          <a
-            href="https://myaccount.google.com/connections"
-            className="text-primary underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            myaccount.google.com
-          </a>
-          .
+          Quem administra o servidor vê a lista de contas (e-mail, data de criação e último acesso) para
+          liberar recursos e proteger o servidor. A sua carteira não aparece nessa lista.
         </p>
       </Section>
 
       {shows('banks') && (
         <Section title="Open Finance (Meu Pluggy)">
           <p>
-            Se você conectar um banco pelo Open Finance, o Capital + lê os seus bancos pelo{' '}
+            Se você conectar uma corretora pelo Open Finance, o Invest + lê os seus investimentos pelo{' '}
             <a
               href="https://meu.pluggy.ai"
               className="text-primary underline"
@@ -112,25 +99,21 @@ export default async function PrivacyPage() {
               Meu Pluggy
             </a>
             , um serviço gratuito da Pluggy em que você mesmo conecta os seus bancos pelo Open Finance. O
-            Capital + usa a sua própria chave da Pluggy (Client ID e Client Secret), que você cria no dashboard
-            da Pluggy e cola no app.
+            {' '}Invest + usa a sua própria chave da Pluggy (Client ID e Client Secret), que você cria no
+            dashboard da Pluggy e cola no app.
           </p>
           <ul className="list-disc pl-5">
             <li>
-              É só leitura: o Capital + não move dinheiro, não paga nada e não altera nada nos seus bancos.
+              É só leitura: o Invest + não move dinheiro, não compra nem vende nada e não altera nada nos seus
+              bancos.
             </li>
             <li>
               Guarda a sua chave (o Client Secret fica cifrado no servidor e nunca é mostrado nem enviado a
-              ninguém além da Pluggy), a lista dos bancos que você trouxe, com o nome que você der a cada um,
-              as contas e cartões de cada banco, com nome e saldo, os investimentos com nome e saldo, e as
-              transações dos últimos 12 meses que os bancos mandam. O saldo fica guardado só para a Reserva e
-              só aparece lá, nas contas que você marcar; nenhum saldo, fatura ou limite do banco aparece no
-              resto do app. As transações trazem: descrição, valor, data, categoria, forma de pagamento e quem
-              pagou ou recebeu (nome e documento, quando o banco informa). Uma vez por hora, o Capital +
-              pergunta à Pluggy se chegou algo novo e, se você quiser, avisa no celular quando há algo para
-              conferir (o aviso pode ser silencioso). O Capital + usa essas transações só para conferir, mês a
-              mês, o que você lançou. Nada vira lançamento sozinho: você confere e lança com um toque; o
-              Capital + lembra a categoria que você escolheu para cada descrição, para sugerir de novo.
+              ninguém além da Pluggy), a lista das corretoras que você trouxe, com o nome que você der a cada
+              uma, e os investimentos de cada uma: nome, código, tipo, quantidade e saldo. Não lê transações nem
+              o saldo das contas. Uma vez por hora, o Invest + pergunta à Pluggy se chegou algo novo. Os
+              investimentos servem só para conferir as quantidades do Diagrama: nada muda sozinho, você confere
+              e corrige com um toque.
             </li>
             <li>
               Esses dados não são vendidos, não são usados para publicidade e não são usados para treinar
@@ -138,9 +121,9 @@ export default async function PrivacyPage() {
             </li>
           </ul>
           <p>
-            Na engrenagem do Open Finance, &quot;Desconectar tudo&quot; apaga a chave e os bancos do Capital + e
-            tira o acesso do Capital + na Pluggy. Os bancos continuam conectados no Meu Pluggy, onde você pode
-            removê-los também.
+            Na engrenagem do Open Finance, &quot;Desconectar tudo&quot; apaga a chave e as corretoras do{' '}
+            Invest + e tira o acesso do Invest + na Pluggy. Elas continuam conectadas no Meu Pluggy, onde você
+            pode removê-las também.
           </p>
         </Section>
       )}
@@ -148,7 +131,7 @@ export default async function PrivacyPage() {
       <Section title="Apagar os seus dados">
         <p>
           Em Configurações (na bandeja de apps, a setinha embaixo da Início), &quot;Apagar todos os
-          dados&quot; apaga tudo o que você lançou em todos os módulos
+          dados&quot; apaga o seu Diagrama e tudo o que você guardou no app
           {connections.length > 0 ? ` (inclusive as conexões ${connections.join(' e ')})` : ''} e mantém a
           conta. &quot;Excluir minha conta&quot;, no mesmo lugar, apaga a conta e todos os dados dela de uma
           vez, depois de você confirmar a senha.
@@ -158,7 +141,7 @@ export default async function PrivacyPage() {
       <p className="text-muted text-sm">
         {/* "/" opens the app for a signed-in person and the login for anyone else (see proxy.ts). */}
         <Link href="/" className="text-primary underline">
-          Voltar ao Capital +
+          Voltar ao Invest +
         </Link>
       </p>
     </main>

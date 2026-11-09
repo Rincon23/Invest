@@ -31,12 +31,11 @@ import type {
   SelfTestStatus,
   ServerStatus,
 } from '@/lib/admin/types';
-import type { ModuleKey } from '@/lib/budget';
+import type { ModuleKey } from '@/lib/core';
 import { moduleDefinition, moduleNames } from '@/lib/modules';
 import { adminRepository } from '@/lib/storage/admin';
 import { toStorageErrorMessage } from '@/lib/storage/errors';
 import { AdminCard as Card } from '@/components/admin/AdminCard';
-import { FactsCard } from '@/components/admin/FactsCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useHomeHref } from '@/components/modules/useHomeHref';
 import { MODULE_VISUALS } from '@/components/modules/visuals';
@@ -414,7 +413,6 @@ export function AdminScreen() {
         )}
       </Card>
 
-      <FactsCard />
     </div>
   );
 }

@@ -118,7 +118,6 @@ describe('the quantities from the broker', () => {
       code: 'PETR4',
       isin: 'BRPETR4ACNOR0',
       quantity: 120,
-      feedsReserve: false,
     });
 
     const diagram = [
@@ -126,7 +125,7 @@ describe('the quantities from the broker', () => {
       { id: 'a-wege', ticker: 'WEGE3', quantity: 40 },
       { id: 'a-itsa', ticker: 'ITSA4', quantity: 10 },
     ];
-    const check = checkHoldings({ ...read, reserve: await banks.investedReserve() }, diagram);
+    const check = checkHoldings({ ...read, outside: [] }, diagram);
     expect(check.assets['a-petr']).toMatchObject({ status: 'different', bank: 120, capital: 100, use: 120 });
     expect(check.assets['a-wege'].status).toBe('match');
     expect(check.assets['a-itsa']).toMatchObject({ status: 'onlyCapital', use: 0 });
@@ -147,20 +146,9 @@ describe('the quantities from the broker', () => {
       ['PETR4', 150],
     ]);
     expect(after.banks[0].lastUpdatedAt).toBe(SECOND);
-    const again = checkHoldings({ ...after, reserve: null }, diagram);
+    const again = checkHoldings({ ...after, outside: [] }, diagram);
     expect(again.assets['a-petr']).toMatchObject({ bank: 150, use: 150 });
     expect(again.assets['a-wege']).toMatchObject({ status: 'onlyCapital', use: 0 });
   });
 
-  it('brings the Reserva investida only when it holds quotas', async () => {
-    const id = randomUUID();
-    await db.insert(schema.user).values({ id, name: 'Pessoa', email: `${id}@teste.local` });
-    const banks = new PostgresBanksRepository(db, id);
-    expect(await banks.investedReserve()).toBeNull();
-    await db.insert(schema.investmentReserves).values({ userId: id, ticker: 'AUPO11', totalQuotas: 0 });
-    expect(await banks.investedReserve()).toBeNull();
-    await db.update(schema.investmentReserves).set({ totalQuotas: 20 });
-    expect(await banks.investedReserve()).toEqual({ ticker: 'AUPO11', quotas: 20 });
-    expect(await banks.holdings()).toEqual({ banks: [], holdings: [] });
-  });
 });
