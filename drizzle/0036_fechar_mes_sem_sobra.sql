@@ -1,0 +1,1 @@
+ALTER TABLE "months" ADD COLUMN "leftovers_dropped" boolean DEFAULT false NOT NULL;

@@ -1,0 +1,4 @@
+ALTER TABLE "recurring_expenses" ADD COLUMN "installment_count" integer;--> statement-breakpoint
+ALTER TABLE "recurring_expenses" ADD COLUMN "installment_accounting" text;--> statement-breakpoint
+ALTER TABLE "recurring_expenses" ADD CONSTRAINT "recurring_expenses_installment_accounting" CHECK ("recurring_expenses"."installment_accounting" is null or "recurring_expenses"."installment_accounting" in ('installment', 'upfront'));--> statement-breakpoint
+ALTER TABLE "recurring_expenses" ADD CONSTRAINT "recurring_expenses_installment_count" CHECK ("recurring_expenses"."installment_count" is null or ("recurring_expenses"."installment_count" >= 2 and "recurring_expenses"."installment_count" <= 120));

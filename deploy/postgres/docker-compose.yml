@@ -1,0 +1,101 @@
+# Banco do Capital (PostgreSQL 17) no Orange Pi — uma stack separada do app, para que o
+# `update.sh` (que reconstrói o app) nunca recrie o banco. O app entra na rede `capital-db`
+# para falar com ele pelo nome `capital-postgres`.
+#
+# No Orange Pi, em ~/capitalapp/db com estes arquivos:
+#   cp .env.example .env     # preencha senhas e caminhos
+#   docker compose up -d
+#
+# Detalhes (acesso de desenvolvimento, backup e restauração) no README.md desta pasta.
+name: capital-db
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: capital-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      # Lidas só na primeira inicialização, por initdb/01-capital.sh.
+      CAPITAL_DB_PASSWORD: ${CAPITAL_DB_PASSWORD:?defina CAPITAL_DB_PASSWORD no .env}
+      CAPITAL_DEV_DB_PASSWORD: ${CAPITAL_DEV_DB_PASSWORD:-}
+      TZ: America/Sao_Paulo
+      PGTZ: America/Sao_Paulo
+    # Ajustado para um Pi com ~4 GB de RAM dividida com vários outros serviços.
+    command:
+      [
+        'postgres',
+        '-c', 'hba_file=/etc/postgresql/pg_hba.conf',
+        '-c', 'timezone=America/Sao_Paulo',
+        '-c', 'log_timezone=America/Sao_Paulo',
+        '-c', 'max_connections=40',
+        '-c', 'shared_buffers=128MB',
+        '-c', 'effective_cache_size=512MB',
+      ]
+    volumes:
+      - ${DATA_DIR:?defina DATA_DIR no .env}:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    ports:
+      # Só o próprio Pi (ex.: túnel SSH). Nunca publique em 0.0.0.0: dentro do container
+      # toda conexão externa aparece com o IP do gateway Docker, então o pg_hba.conf não
+      # consegue separar a rede de casa da Tailscale. O acesso de dev é o serviço abaixo.
+      - 127.0.0.1:5432:5432
+    networks: [capital-db]
+    mem_limit: 768m
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backup:
+    image: postgres:17-alpine
+    container_name: capital-db-backup
+    restart: unless-stopped
+    user: '${BACKUP_UID:-1000}:${BACKUP_GID:-1000}'
+    entrypoint: ['/bin/sh', '/backup.sh']
+    environment:
+      PGHOST: capital-postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_DATABASES: capital
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ${BACKUP_DIR:?defina BACKUP_DIR no .env}:/backups
+      # ~/capitalapp só para leitura: o backup.sh copia os .env (app e banco) para
+      # backups/config. A pasta inteira, e não os arquivos: um arquivo que ainda não existe
+      # (app não instalado) viraria uma pasta criada pelo Docker no lugar dele.
+      - ..:/capitalapp:ro
+    networks: [capital-db]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Acesso de desenvolvimento pela Tailscale (perfil "dev", ligado pelo `install.sh --tailscale`).
+  # Um container à parte, preso ao IP da Tailscale do Pi: se ele falhar (ex.: a Tailscale ainda
+  # não subiu no boot), só o desenvolvimento para — o banco e o app continuam no ar.
+  dev-access:
+    image: alpine/socat:latest
+    container_name: capital-db-dev-access
+    profiles: [dev]
+    restart: unless-stopped
+    command: ['tcp-listen:5432,fork,reuseaddr', 'tcp-connect:capital-postgres:5432']
+    ports:
+      - ${DEV_ACCESS_ADDR:-127.0.0.1:15432}:5432
+    networks: [capital-db]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  capital-db:
+    name: capital-db

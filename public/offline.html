@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capital + — Offline</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px;
+        text-align: center;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        background: #f4f4f6;
+        color: #16161a;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0b0b0d;
+          color: #f4f4f5;
+        }
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0;
+      }
+      p {
+        margin: 0;
+        color: #6b6b76;
+        max-width: 28rem;
+      }
+      button {
+        margin-top: 12px;
+        min-height: 44px;
+        padding: 0 20px;
+        border-radius: 999px;
+        border: none;
+        background: #15803d;
+        color: #fff;
+        font-weight: 600;
+        font-size: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sem conexão</h1>
+    <p>
+      Esta página ainda não está disponível offline. Abra o Capital + pelo menos uma vez com internet para que
+      ela fique salva no dispositivo.
+    </p>
+    <button onclick="location.reload()">Tentar novamente</button>
+  </body>
+</html>

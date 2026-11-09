@@ -1,0 +1,44 @@
+# Run Capital in a container on the Orange Pi. The database is a separate stack
+# (deploy/postgres, installed at ~/capitalapp/db) that this container reaches over the
+# external Docker network `capital-db` — start the database first.
+#
+#   docker compose --env-file .env.local up -d --build     (or ./update.sh)
+#
+# .env.local must define (see .env.example): DATABASE_URL, BETTER_AUTH_SECRET,
+# BETTER_AUTH_URL, APP_ALLOWED_ORIGINS and the SMTP_* settings. It is passed whole to
+# the container. APP_ALLOWED_ORIGINS is also baked at build time — rebuild
+# (`up -d --build`) after changing it.
+name: capital
+
+services:
+  capital:
+    build:
+      context: .
+      args:
+        APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS:-}
+    image: capital:latest
+    container_name: capital
+    restart: unless-stopped
+    ports:
+      # Only the Pi itself (127.0.0.1) reaches the app: the Cloudflare tunnel is the one way in.
+      # Published on every interface, anyone on the network could skip Cloudflare and forge the
+      # header the rate limits trust (cf-connecting-ip) — and Docker bypasses UFW. If cloudflared
+      # reaches the app some other way (its own container on the bridge network, the Pi's LAN IP),
+      # set CAPITAL_BIND in .env.local to that address (e.g. 172.17.0.1).
+      - '${CAPITAL_BIND:-127.0.0.1}:3000:3000'
+    env_file: .env.local
+    environment:
+      TZ: America/Sao_Paulo
+    networks: [capital-db]
+    # The board's temperature (lib/server/loadGuard.ts) comes from /sys/class/thermal, which
+    # Docker already exposes read-only inside the container.
+    # Logs rotate: an attacker (or a bug) writing to the log can't fill the SD card.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+networks:
+  capital-db:
+    external: true

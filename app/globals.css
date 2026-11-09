@@ -1,0 +1,245 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f4f4f6;
+  --foreground: #16161a;
+  --card: #ffffff;
+  --card-foreground: #16161a;
+  --border: #e4e4e8;
+  --muted: #6b6b76;
+  --muted-foreground: #8a8a94;
+  --primary: #15803d;
+  --primary-foreground: #ffffff;
+  --accent: #2563eb;
+  /* Text-safe (AA) tones for labels/emphasis. */
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --success: #15803d;
+  --success-bg: #f0fdf4;
+  /* Validated status marks (progress bars, chart fills) — fixed, never themed per hue. */
+  --danger-fill: #d03b3b;
+  --warning-fill: #fab219;
+  --success-fill: #0ca30c;
+  /* Categorical chart palette, fixed order (never cycled). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+}
+
+.dark {
+  --background: #0b0b0d;
+  --foreground: #f4f4f5;
+  --card: #18181b;
+  --card-foreground: #f4f4f5;
+  --border: #2a2a2e;
+  --muted: #a1a1aa;
+  --muted-foreground: #71717a;
+  --primary: #4ade80;
+  --primary-foreground: #052e13;
+  --accent: #60a5fa;
+  --danger: #f87171;
+  --danger-bg: #2a1414;
+  --warning: #fbbf24;
+  --warning-bg: #2a2114;
+  --success: #4ade80;
+  --success-bg: #10231a;
+  --danger-fill: #d03b3b;
+  --warning-fill: #fab219;
+  --success-fill: #0ca30c;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-danger-fill: var(--danger-fill);
+  --color-warning-fill: var(--warning-fill);
+  --color-success-fill: var(--success-fill);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-series-7: var(--series-7);
+  --color-series-8: var(--series-8);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Short motions for the module list: a locked module shakes, the module it needs calls for attention.
+   The navigation hints: the up-arrow of the Início hops a few times until the drawer is opened once,
+   and the sideways arrows of a one-time "deslize" hint sway. The toast balloon pops up when it
+   appears (or takes the place of the one before). "Resgatar" (the XP of the day) pulses until
+   tapped, so it reads as something to tap. */
+@theme {
+  --animate-claim-pulse: capital-claim-pulse 1.6s ease-in-out infinite;
+  --animate-shake: capital-shake 0.45s ease-in-out;
+  --animate-attention: capital-attention 1.8s ease-out;
+  --animate-apps-hop: capital-apps-hop 2.4s ease-in-out 0.8s 3;
+  --animate-sway: capital-sway 1.4s ease-in-out infinite;
+  --animate-toast-in: capital-toast-in 0.18s ease-out;
+  --animate-level-up: capital-level-up 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* A little swell and a ring that spreads out and fades, then a pause. */
+  @keyframes capital-claim-pulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent);
+    }
+    35% {
+      transform: scale(1.07);
+    }
+    70% {
+      transform: scale(1);
+      box-shadow: 0 0 0 10px transparent;
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
+
+  /* A new level of the Missões: the tree grows into place. */
+  @keyframes capital-level-up {
+    from {
+      opacity: 0;
+      transform: scale(0.4) translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes capital-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes capital-apps-hop {
+    0%,
+    55%,
+    100% {
+      transform: translateY(0);
+    }
+    68% {
+      transform: translateY(-7px);
+    }
+    80% {
+      transform: translateY(0);
+    }
+    90% {
+      transform: translateY(-3px);
+    }
+  }
+
+  @keyframes capital-sway {
+    0%,
+    100% {
+      transform: translateX(-3px);
+    }
+    50% {
+      transform: translateX(3px);
+    }
+  }
+
+  @keyframes capital-shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-6px);
+    }
+    40% {
+      transform: translateX(6px);
+    }
+    60% {
+      transform: translateX(-4px);
+    }
+    80% {
+      transform: translateX(4px);
+    }
+  }
+
+  @keyframes capital-attention {
+    0%,
+    60% {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 70%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 3px transparent;
+    }
+  }
+}
+
+html {
+  color-scheme: light;
+  /* Stops a sideways drag from being read as the browser's own back/forward swipe gesture
+     (Chrome/Safari on phones) — on the Início, a horizontal drag pages between the áreas de
+     trabalho instead (HomeDesk). */
+  overscroll-behavior-x: none;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  /* Lets the browser keep handling vertical scroll on its own, but decide fast that a
+     horizontal drag is ours (the Início's áreas, HomeDesk) rather than a page pan. */
+  touch-action: pan-y;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  overscroll-behavior-x: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}

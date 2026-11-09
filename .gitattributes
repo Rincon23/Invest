@@ -1,0 +1,4 @@
+# Scripts e configurações que rodam no Orange Pi (Linux) precisam de fim de linha LF,
+# mesmo quando o repositório é clonado no Windows.
+*.sh text eol=lf
+deploy/** text eol=lf
