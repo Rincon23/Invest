@@ -60,15 +60,15 @@ quando o servidor sobe.
 
 ## Publicar no Orange Pi
 
-No Pi, tudo do Invest + fica em `~/investapp` (repositório em `~/investapp/Invest`, logs em
-`~/investapp/logs`). O banco continua em `~/capitalapp/db`.
+No Pi, o Invest + fica junto do Capital +: o repositório em `~/capitalapp/Invest`, os logs em
+`~/capitalapp/logs` e o banco em `~/capitalapp/db` (o backup diário já leva o `.env.local` dele).
 
 1. **Bancos `invest` e `invest_dev`** (uma vez): em `~/capitalapp/db`, rode `./add-invest.sh`
    (do repositório Capital). Ele cria os usuários e bancos e põe as senhas no `.env` de lá.
 2. **App:**
 
    ```bash
-   cd ~/investapp/Invest
+   cd ~/capitalapp/Invest
    cp .env.example .env.local
    # DATABASE_URL=postgres://invest:<INVEST_DB_PASSWORD>@capital-postgres:5432/invest
    # BETTER_AUTH_SECRET, VAPID_*, ENCRYPTION_KEY: novos, só do Invest +
