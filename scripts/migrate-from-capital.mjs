@@ -105,14 +105,13 @@ async function main() {
       plan.push({ person, skip: 'o e-mail já tem outra conta no Invest +' });
       continue;
     }
-    const [assets, contributions, questions, keys, reserves, vip] = await Promise.all([
-      rowsOf('diagram_assets', person.id, 'id'),
-      rowsOf('diagram_contributions', person.id, 'id'),
-      rowsOf('diagram_questions', person.id, 'id'),
-      rowsOf('bank_keys', person.id),
-      rowsOf('investment_reserves', person.id, 'ticker, total_quotas'),
-      rowsOf('vip_users', person.id, 'user_id'),
-    ]);
+    // One connection runs one query at a time: in order, not in parallel.
+    const assets = await rowsOf('diagram_assets', person.id, 'id');
+    const contributions = await rowsOf('diagram_contributions', person.id, 'id');
+    const questions = await rowsOf('diagram_questions', person.id, 'id');
+    const keys = await rowsOf('bank_keys', person.id);
+    const reserves = await rowsOf('investment_reserves', person.id, 'ticker, total_quotas');
+    const vip = await rowsOf('vip_users', person.id, 'user_id');
     plan.push({
       person,
       assets: assets.length,
