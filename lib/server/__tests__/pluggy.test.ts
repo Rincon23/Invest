@@ -361,36 +361,61 @@ describe('a bank arriving', () => {
 });
 
 describe('leaving', () => {
-  it('takes one bank out, here and at Pluggy', async () => {
-    const { id, banks } = await newPerson();
+  it('takes one bank out of the Invest only: the connection stays at Pluggy for the Capital +', async () => {
+    const { banks } = await newPerson();
     await banks.saveKey('id', 'segredo');
     await banks.addPending('a', null);
     await banks.addPending('b', null);
-    const { fetchImpl, calls } = fakePluggy({
-      'POST /auth': { body: { apiKey: 'chave' } },
-      'DELETE /items/a': { body: {} },
-    });
-    await removeConnection(banks, id, 'a', fetchImpl);
-    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.path)).toEqual(['/items/a']);
+    const fetchImpl = vi.fn();
+    vi.stubGlobal('fetch', fetchImpl);
+    try {
+      await removeConnection(banks, 'a');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
     expect((await banks.listConnections()).map((c) => c.itemId)).toEqual(['b']);
   });
 
-  it('"Desconectar" removes every bank at Pluggy and the key and banks from the app', async () => {
+  it('"Desconectar" takes the key and the banks out of the Invest, never deleting them at Pluggy', async () => {
     const { id, banks } = await newPerson();
     await banks.saveKey('id', 'segredo');
     await banks.addPending('a', null);
     await banks.replaceInvestments('a', [
       { investmentId: 'x', name: 'PETR4', type: 'EQUITY', subtype: 'STOCK', code: 'PETR4', quantity: 1, balance: 1, balanceAt: null },
     ]);
-    const { fetchImpl, calls } = fakePluggy({
-      'POST /auth': { body: { apiKey: 'chave' } },
-      'DELETE /items/a': { body: {} },
-    });
-    await disconnectAll(banks, id, fetchImpl);
-    expect(calls.some((call) => call.method === 'DELETE' && call.path === '/items/a')).toBe(true);
+    const fetchImpl = vi.fn();
+    vi.stubGlobal('fetch', fetchImpl);
+    try {
+      await disconnectAll(banks, id);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
     expect(await banks.getKey()).toBeNull();
     expect(await banks.listConnections()).toEqual([]);
     expect(await db.select().from(schema.bankInvestments).where(eq(schema.bankInvestments.userId, id))).toEqual([]);
+  });
+
+  it('says plainly when Pluggy only lets its widget create a connection', async () => {
+    const { id, banks } = await newPerson();
+    await banks.saveKey('id', 'segredo');
+    vi.stubEnv('PLUGGY_REDIRECT_URI', 'https://invest.exemplo.dev/bancos');
+    const { fetchImpl } = fakePluggy({
+      'POST /auth': { body: { apiKey: 'chave' } },
+      'POST /items': {
+        status: 400,
+        body: { code: 'CREATE_ITEMS_API_FREE_DISABLED', message: 'Free subscription can only create items through our Connect Widget' },
+      },
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await expect(startConnection(banks, id, fetchImpl)).rejects.toMatchObject({ code: 'PLUGGY_WIDGET_ONLY', status: 409 });
+    } finally {
+      warn.mockRestore();
+      vi.unstubAllEnvs();
+    }
+    expect(await banks.listConnections()).toEqual([]);
   });
 
   it('"Apagar todos os dados" takes the Open Finance along', async () => {

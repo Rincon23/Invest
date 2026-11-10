@@ -140,6 +140,14 @@ export async function startConnection(
       console.warn(`[bancos] a Pluggy recusou criar o item: ${reply.status} ${refusal.code ?? ''} ${refusal.message}`);
     }
     if (reply.status >= 500) throw unavailable();
+    // Since 2026-11 Pluggy's free plan only creates items through its Connect Widget.
+    if (reply.status >= 300 && pluggyErrorOf(reply).code === 'CREATE_ITEMS_API_FREE_DISABLED') {
+      throw new HttpError(
+        409,
+        'PLUGGY_WIDGET_ONLY',
+        'A Pluggy não deixa mais trazer bancos por aqui no plano grátis. As suas corretoras vêm das conexões que você já tem no Capital\u00a0+.',
+      );
+    }
     if (reply.status >= 300) {
       throw new HttpError(
         502,
@@ -453,42 +461,23 @@ async function removeItems(client: PluggyClient, itemIds: string[]): Promise<voi
   }
 }
 
-/** Takes one bank out of the app (and out of the person's Pluggy application). */
-export async function removeConnection(
-  repo: PostgresBanksRepository,
-  userId: string,
-  itemId: string,
-  fetchImpl: FetchLike = fetch,
-): Promise<void> {
+/**
+ * Takes one bank out of the Invest + only. The item stays at Pluggy: the same connection usually
+ * serves the Capital + too (both apps read it with the person's own key, and the free plan creates
+ * items only through Pluggy's widget), so deleting it there would cut it off in the other app.
+ */
+export async function removeConnection(repo: PostgresBanksRepository, itemId: string): Promise<void> {
   if (!(await repo.hasConnection(itemId))) {
     throw new HttpError(404, 'NOT_FOUND', 'Este banco não está mais no Invest +.');
-  }
-  try {
-    await removeItems(await clientFor(repo, userId, fetchImpl), [itemId]);
-  } catch {
-    // Without the key or Pluggy, the bank still leaves the app.
   }
   await repo.deleteConnections([itemId]);
 }
 
 /**
- * "Desconectar": every bank leaves the person's Pluggy application, and the key and the banks leave
- * the app. The banks stay connected in Meu Pluggy itself, where the person removes them if they
- * want to.
+ * "Desconectar": the key and the banks leave the Invest +. The connections stay at Pluggy and in
+ * Meu Pluggy (the Capital + may use them), where the person removes them if they want to.
  */
-export async function disconnectAll(
-  repo: PostgresBanksRepository,
-  userId: string,
-  fetchImpl: FetchLike = fetch,
-): Promise<void> {
-  const itemIds = await repo.itemIds();
-  if (itemIds.length > 0) {
-    try {
-      await removeItems(await clientFor(repo, userId, fetchImpl), itemIds);
-    } catch {
-      // The key no longer works: nothing to remove at Pluggy from here.
-    }
-  }
+export async function disconnectAll(repo: PostgresBanksRepository, userId: string): Promise<void> {
   await repo.deleteAll();
   forgetPluggyKey(userId);
 }

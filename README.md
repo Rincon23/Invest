@@ -97,8 +97,21 @@ docker exec -e CAPITAL_DATABASE_URL='...' -e CAPITAL_ENCRYPTION_KEY='...' invest
   node scripts/migrate-from-capital.mjs --apply
 ```
 
-As corretoras **não** vêm: cada pessoa traz de novo no Invest + (uma autorização no meu.pluggy.ai).
-Um item compartilhado entre os dois apps seria apagado nos dois quando a pessoa o tirasse de um.
+### As corretoras: as mesmas conexões do Capital +
+
+Desde 2026-11 o plano grátis da Pluggy só cria conexões pelo Connect Widget dela; criar pela API
+(o que o "Trazer um banco" fazia) responde `CREATE_ITEMS_API_FREE_DISABLED`, e o app mostra isso com
+uma mensagem clara. Como a chave da Pluggy é a mesma nos dois apps, o Invest + **usa as conexões que a
+pessoa já tem no Capital +**: `scripts/copy-connections-from-capital.mjs` copia os ids das conexões que
+mandaram investimentos (e os investimentos da última leitura), só para quem tem a mesma chave nos dois.
+Sem `--apply` é um ensaio:
+
+```bash
+docker exec -e CAPITAL_DATABASE_URL='postgres://capital:...@capital-postgres:5432/capital'   invest node scripts/copy-connections-from-capital.mjs --apply
+```
+
+Por serem compartilhadas, **"Tirar banco" e "Desconectar" no Invest + nunca apagam a conexão na
+Pluggy**: ela só sai daqui e continua no Meu Pluggy e no Capital +.
 
 ## Testes automáticos (Administração)
 

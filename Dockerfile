@@ -43,8 +43,9 @@ COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nextjs /app/.next/static ./.next/static
 # SQL migrations, applied by the server when it starts (instrumentation.ts).
 COPY --from=builder --chown=nextjs:nextjs /app/drizzle ./drizzle
-# The one-off copy of the Diagrama from the Capital + (run with docker exec; see the README).
+# The one-off copies from the Capital + (the Diagrama, the Open Finance connections; docker exec, see the README).
 COPY --from=builder --chown=nextjs:nextjs /app/scripts/migrate-from-capital.mjs ./scripts/migrate-from-capital.mjs
+COPY --from=builder --chown=nextjs:nextjs /app/scripts/copy-connections-from-capital.mjs ./scripts/copy-connections-from-capital.mjs
 
 USER nextjs
 EXPOSE 3000

@@ -298,7 +298,7 @@ function Banks() {
           onRemove={async () => {
             const ok = await confirm({
               title: 'Tirar este banco',
-              message: `• Banco: ${renaming.name}. Ele sai do Invest + e da sua chave da Pluggy, mas continua conectado no Meu Pluggy.`,
+              message: `• Banco: ${renaming.name}. Ele sai do Invest +, mas continua no Meu Pluggy e no Capital +.`,
               confirmLabel: 'Tirar',
               destructive: true,
             });
@@ -330,7 +330,7 @@ function Banks() {
                 title: 'Desconectar o Open Finance',
                 message:
                   connections.length > 0
-                    ? `A sua chave e ${connections.length === 1 ? 'o banco' : `os ${connections.length} bancos`} saem do Invest +. No Meu Pluggy, eles continuam.`
+                    ? `A sua chave e ${connections.length === 1 ? 'o banco' : `os ${connections.length} bancos`} saem do Invest +. No Meu Pluggy e no Capital +, eles continuam.`
                     : 'A sua chave sai do Invest +.',
                 confirmLabel: 'Desconectar',
                 destructive: true,
